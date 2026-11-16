@@ -100,21 +100,21 @@ export function MyLocker() {
                 </div>
               </div>
 
-              {/* Quick QR access */}
+              {/* Quick QR Scanner access */}
               <button
                 onClick={() => navigate('/my-qr')}
-                className="w-full flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-2xl hover:bg-gray-100 transition-colors"
+                className="w-full flex items-center justify-between p-4 bg-emerald-50 border border-emerald-200 rounded-2xl hover:bg-emerald-100 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center">
-                    <span className="text-green-700 text-base">🔲</span>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
+                    <span className="text-base">📷</span>
                   </div>
                   <div className="text-left">
-                    <p className="text-sm font-semibold text-gray-800">Show QR & PIN</p>
-                    <p className="text-xs text-gray-400">Tap to view your access code</p>
+                    <p className="text-sm font-semibold text-gray-800">Scan Locker QR</p>
+                    <p className="text-xs text-gray-500">Arahkan kamera ke LCD pintu loker</p>
                   </div>
                 </div>
-                <span className="text-xs text-green-600 font-medium">View →</span>
+                <span className="text-xs text-emerald-700 font-bold">Buka Scanner →</span>
               </button>
             </div>
           ) : (

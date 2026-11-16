@@ -42,7 +42,7 @@ export function BottomNav() {
           <span className="w-14 h-14 rounded-full bg-green-700 flex items-center justify-center shadow-lg shadow-green-700/40 hover:bg-green-800 transition-colors">
             <QrCode size={26} className="text-white" />
           </span>
-          <span className="text-[10px] text-gray-400 mt-0.5 font-medium">QR</span>
+          <span className="text-[10px] text-gray-400 mt-0.5 font-medium">Scan</span>
         </NavLink>
 
         {navItem('/transactions', Receipt, 'Transactions')}

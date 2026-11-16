@@ -1,73 +1,20 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  MapPin, Bell, ChevronRight, Package,
+  Bell, ChevronRight, Package,
   HelpCircle, MessageSquare, Navigation, Radio, Loader2
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { formatTime } from '../utils/time'
 import { fetchHubsWithAvailability, type HubWithStats } from '../lib/lockerService'
 import { supabase } from '../lib/supabase'
-
-function MapView({ hubs }: { hubs: HubWithStats[] }) {
-  const defaultHub = hubs[0]
-  const gubeng = hubs.find((h) => h.category === 'station') || hubs[2]
-  const tp = hubs.find((h) => h.category === 'mall') || hubs[3]
-
-  return (
-    <div className="relative w-full h-48 bg-gradient-to-b from-green-50 to-emerald-100 rounded-2xl overflow-hidden border border-green-200">
-      {/* Grid lines to simulate map */}
-      <svg className="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
-        {[...Array(6)].map((_, i) => (
-          <line key={`h${i}`} x1="0" y1={`${(i + 1) * 16}%`} x2="100%" y2={`${(i + 1) * 16}%`} stroke="#166534" strokeWidth="1" />
-        ))}
-        {[...Array(8)].map((_, i) => (
-          <line key={`v${i}`} x1={`${(i + 1) * 12}%`} y1="0" x2={`${(i + 1) * 12}%`} y2="100%" stroke="#166534" strokeWidth="1" />
-        ))}
-        {/* Roads */}
-        <line x1="0" y1="50%" x2="100%" y2="50%" stroke="#166534" strokeWidth="3" />
-        <line x1="30%" y1="0" x2="30%" y2="100%" stroke="#166534" strokeWidth="3" />
-        <line x1="70%" y1="0" x2="70%" y2="100%" stroke="#166534" strokeWidth="2" />
-      </svg>
-
-      {/* Map pins with dynamic counts from Supabase */}
-      <div style={{ position: 'absolute', top: '30%', left: '28%', transform: 'translate(-50%,-100%)' }}>
-        <MapPin className="text-green-700" size={28} fill="#dcfce7" />
-        <span className="absolute -top-1 -right-1 bg-green-700 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full shadow">
-          {defaultHub?.total_available ?? 8}
-        </span>
-      </div>
-
-      <div style={{ position: 'absolute', top: '55%', left: '68%', transform: 'translate(-50%,-100%)' }}>
-        <MapPin className="text-green-600" size={22} fill="#dcfce7" />
-        <span className="absolute -top-1 -right-1 bg-green-600 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full shadow">
-          {gubeng?.total_available ?? 12}
-        </span>
-      </div>
-
-      <div style={{ position: 'absolute', top: '72%', left: '45%', transform: 'translate(-50%,-100%)' }}>
-        <MapPin className="text-green-500" size={20} fill="#dcfce7" />
-        <span className="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full shadow">
-          {tp?.total_available ?? 4}
-        </span>
-      </div>
-
-      {/* Current location dot */}
-      <div className="absolute w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-md" style={{ top: '42%', left: '42%', transform: 'translate(-50%,-50%)' }}>
-        <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-60" />
-      </div>
-
-      {/* Map label */}
-      <span className="absolute bottom-2 right-2 text-[10px] text-green-800 bg-white/90 backdrop-blur-xs px-2 py-0.5 rounded-full font-medium shadow-xs">
-        📍 Surabaya Hubs Live
-      </span>
-    </div>
-  )
-}
+import { LiveMap } from '../components/LiveMap'
 
 export function Home() {
   const navigate = useNavigate()
   const {
+    userName,
+    isAuthenticated,
     hasActiveLocker,
     lockerNumber,
     remainingSeconds,
@@ -144,11 +91,35 @@ export function Home() {
                 </span>
               )}
             </button>
+
+            {/* Profile Avatar / Sign In Button */}
+            {isAuthenticated ? (
+              <button
+                onClick={() => navigate('/account')}
+                className="w-8 h-8 rounded-full bg-green-500 hover:bg-green-400 border border-green-300 flex items-center justify-center text-white text-xs font-bold shadow-xs transition-colors"
+              >
+                {userName ? userName.charAt(0).toUpperCase() : 'U'}
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('/auth')}
+                className="px-2.5 py-1 bg-white text-green-800 rounded-full text-[11px] font-bold shadow-xs hover:bg-green-50 transition-colors"
+              >
+                Sign In
+              </button>
+            )}
           </div>
         </div>
 
-        <h1 className="text-white text-2xl font-bold">Find a locker</h1>
-        <p className="text-green-200 text-sm mt-0.5">Smart IoT storage in Surabaya</p>
+        <div className="flex items-baseline justify-between">
+          <div>
+            <p className="text-green-200 text-xs font-medium">
+              {isAuthenticated ? `Hi, ${userName} 👋` : 'Welcome to Titipin'}
+            </p>
+            <h1 className="text-white text-2xl font-bold mt-0.5">Find a locker</h1>
+          </div>
+        </div>
+        <p className="text-green-200 text-xs mt-0.5">Smart IoT storage in Surabaya</p>
       </div>
 
       <div className="flex-1 px-4 py-4 space-y-4">
@@ -173,8 +144,8 @@ export function Home() {
           </button>
         )}
 
-        {/* Map */}
-        <MapView hubs={hubs} />
+        {/* Real Leaflet Map */}
+        <LiveMap hubs={hubs} onSelectHub={(hub) => { setSelectedHub(hub.name, hub.id); navigate('/hub-detail') }} />
 
         {/* Nearest hub card with live Supabase data */}
         <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">

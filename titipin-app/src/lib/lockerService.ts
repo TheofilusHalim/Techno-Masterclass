@@ -187,54 +187,97 @@ export async function processBookingTransaction({
 }
 
 /**
- * Triggers hardware door unlock in Supabase:
- * Sets `is_door_open: true` and status: 'unlocked' for 5 seconds,
- * then resets to `is_door_open: false` and status: 'occupied'.
+ * Records an audit log entry in the `locker_logs` table.
  */
-export async function triggerDoorUnlockRemote(lockerNumber: string = 'M-07'): Promise<{ success: boolean; message: string }> {
+export async function recordLockerLog({
+  lockerId,
+  lockerNumber,
+  bookingId,
+  accessMethod = 'REMOTE_APP',
+  action = 'DOOR_UNLOCKED',
+}: {
+  lockerId?: string
+  lockerNumber?: string
+  bookingId?: string | null
+  accessMethod?: 'QR_SCAN' | 'REMOTE_APP' | 'RFID_TAP' | 'CS_OVERRIDE'
+  action?: 'DOOR_UNLOCKED' | 'EXTENDED_1HR'
+}) {
   try {
-    // 1. Send unlock command: is_door_open = true, status = unlocked
-    // Try with is_door_open first
+    let resolvedLockerId = lockerId
+    if (!resolvedLockerId && lockerNumber) {
+      const { data } = await supabase.from('lockers').select('id').eq('locker_number', lockerNumber).limit(1)
+      if (data && data.length > 0) resolvedLockerId = data[0].id
+    }
+
+    if (!resolvedLockerId) return
+
+    await supabase.from('locker_logs').insert({
+      locker_id: resolvedLockerId,
+      booking_id: bookingId || null,
+      access_method: accessMethod,
+      action: action,
+    })
+  } catch (err) {
+    console.warn('Locker log record warning:', err)
+  }
+}
+
+/**
+ * Triggers hardware door unlock in Supabase:
+ * Sets `door_command: 'UNLOCK'`, `is_door_open: true`, and `status: 'unlocked'` for 5 seconds.
+ * ESP32-S3 IoT microcontroller listens to `door_command` in realtime.
+ * After 5 seconds, resets to `door_command: 'LOCKED'`, `is_door_open: false`, and `status: 'occupied'`.
+ */
+export async function triggerDoorUnlockRemote(
+  lockerNumber: string = 'M-07',
+  accessMethod: 'QR_SCAN' | 'REMOTE_APP' | 'RFID_TAP' = 'REMOTE_APP'
+): Promise<{ success: boolean; message: string }> {
+  try {
+    // 1. Send unlock command
     const openPayload: Record<string, any> = {
       status: 'unlocked',
+      door_command: 'UNLOCK',
+      is_door_open: true,
       updated_at: new Date().toISOString(),
     }
-    // attempt to set is_door_open
-    openPayload.is_door_open = true
 
     let { error } = await supabase
       .from('lockers')
       .update(openPayload)
       .eq('locker_number', lockerNumber)
 
-    // If is_door_open column does not exist yet, retry with status only
-    if (error && error.message.includes('is_door_open')) {
-      console.warn('is_door_open column not present yet; updating status only.')
-      const fallback = await supabase
-        .from('lockers')
-        .update({ status: 'unlocked', updated_at: new Date().toISOString() })
-        .eq('locker_number', lockerNumber)
-      error = fallback.error
+    // Fallback if schema doesn't have door_command yet
+    if (error && (error.message.includes('door_command') || error.message.includes('is_door_open'))) {
+      const safePayload: Record<string, any> = {
+        status: 'unlocked',
+        updated_at: new Date().toISOString(),
+      }
+      if (!error.message.includes('is_door_open')) safePayload.is_door_open = true
+      await supabase.from('lockers').update(safePayload).eq('locker_number', lockerNumber)
     }
 
-    if (error) {
-      console.warn('Remote unlock Supabase warning:', error.message)
-    }
+    // 2. Audit log
+    await recordLockerLog({
+      lockerNumber,
+      accessMethod,
+      action: 'DOOR_UNLOCKED',
+    })
 
-    // 2. Set timer to auto-relock in 5 seconds
+    // 3. Set timer to auto-relock in 5 seconds (simulates ESP32-S3 auto-relock)
     setTimeout(async () => {
       const closePayload: Record<string, any> = {
         status: 'occupied',
+        door_command: 'LOCKED',
+        is_door_open: false,
         updated_at: new Date().toISOString(),
       }
-      closePayload.is_door_open = false
 
       let { error: closeErr } = await supabase
         .from('lockers')
         .update(closePayload)
         .eq('locker_number', lockerNumber)
 
-      if (closeErr && closeErr.message.includes('is_door_open')) {
+      if (closeErr && (closeErr.message.includes('door_command') || closeErr.message.includes('is_door_open'))) {
         await supabase
           .from('lockers')
           .update({ status: 'occupied', updated_at: new Date().toISOString() })
@@ -242,9 +285,60 @@ export async function triggerDoorUnlockRemote(lockerNumber: string = 'M-07'): Pr
       }
     }, 5000)
 
-    return { success: true, message: `Locker ${lockerNumber} door unlocked for 5s` }
+    return { success: true, message: `Locker ${lockerNumber} door unlocked for 5s (Method: ${accessMethod})` }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     return { success: false, message: msg }
+  }
+}
+
+/**
+ * Validates a scanned QR payload (from physical TFT LCD on locker door)
+ * against the user's active locker booking.
+ */
+export async function validateAndUnlockByQR(
+  scannedPayload: string,
+  expectedLockerNumber: string = 'M-07'
+): Promise<{ success: boolean; lockerNumber: string; message: string }> {
+  try {
+    const trimmed = scannedPayload.trim()
+
+    // Supported formats:
+    // 1. "TITIPIN:UK_PETRA:M-07"
+    // 2. "TITIPIN:GUBENG:S-03"
+    // 3. Raw locker number: "M-07"
+    let extractedLocker = expectedLockerNumber
+
+    if (trimmed.startsWith('TITIPIN:')) {
+      const parts = trimmed.split(':')
+      if (parts.length >= 3) {
+        extractedLocker = parts[2]
+      }
+    } else if (trimmed.includes('-')) {
+      extractedLocker = trimmed
+    }
+
+    // Verify match with user's active session
+    if (expectedLockerNumber && extractedLocker.toUpperCase() !== expectedLockerNumber.toUpperCase()) {
+      return {
+        success: false,
+        lockerNumber: extractedLocker,
+        message: `QR code for Locker ${extractedLocker} does not match your active booking (${expectedLockerNumber}).`,
+      }
+    }
+
+    // Trigger unlock with QR_SCAN access method
+    const unlockResult = await triggerDoorUnlockRemote(expectedLockerNumber, 'QR_SCAN')
+
+    return {
+      success: unlockResult.success,
+      lockerNumber: expectedLockerNumber,
+      message: unlockResult.success
+        ? `Verification successful! Locker ${expectedLockerNumber} door unlocked.`
+        : unlockResult.message,
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { success: false, lockerNumber: expectedLockerNumber, message: msg }
   }
 }

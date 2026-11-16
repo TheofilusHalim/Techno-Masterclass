@@ -44,11 +44,25 @@ export interface Locker {
   size: LockerSize
   status: LockerStatus
   is_door_open?: boolean
+  door_command?: 'LOCKED' | 'UNLOCK'
+  is_occupied?: boolean
   qr_payload: string | null   // e.g. "TITIPIN:UK_PETRA:M-07" — displayed on TFT LCD
   rfid_uid: string | null     // RFID fallback
   current_booking_id: string | null
   created_at: string
   updated_at: string
+}
+
+export type AccessMethod = 'QR_SCAN' | 'REMOTE_APP' | 'RFID_TAP' | 'CS_OVERRIDE'
+export type LockerAction = 'DOOR_UNLOCKED' | 'EXTENDED_1HR'
+
+export interface LockerLog {
+  id: string
+  locker_id: string
+  booking_id: string | null
+  access_method: AccessMethod
+  action: LockerAction
+  created_at: string
 }
 
 export interface Booking {

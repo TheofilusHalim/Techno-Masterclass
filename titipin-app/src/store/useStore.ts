@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { triggerDoorUnlockRemote } from '../lib/lockerService'
+import { supabase } from '../lib/supabase'
 
 export interface Transaction {
   id: string
@@ -32,8 +33,11 @@ interface AppState {
   connectionStatus: ConnectionStatus
   connectionError: string | null
 
-  // User & plan
+  // User & authentication
   userName: string
+  userEmail: string
+  userId: string | null
+  isAuthenticated: boolean
   hasMonthlyPlan: boolean
 
   // Booking flow state
@@ -54,7 +58,7 @@ interface AppState {
   tickLockerTimer: () => void
   tickQRTimer: () => void
   extendLocker: () => void
-  triggerUnlock: (source: string) => Promise<void>
+  triggerUnlock: (source: string, accessMethod?: 'QR_SCAN' | 'REMOTE_APP' | 'RFID_TAP') => Promise<void>
   setDoorOpenFromRealtime: (isOpen: boolean, source?: string) => void
   setSelectedHub: (hub: string, hubId?: string) => void
   setSelectedSize: (size: 'S' | 'M' | 'L') => void
@@ -64,6 +68,10 @@ interface AppState {
   subscribeMonthly: () => void
   markNotificationsRead: () => void
   setConnectionStatus: (status: ConnectionStatus, error?: string | null) => void
+  loginUser: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  registerUser: (fullName: string, email: string, password: string) => Promise<{ success: boolean; needsEmailConfirmation?: boolean; error?: string }>
+  logoutUser: () => Promise<void>
+  loginDemo: (name?: string, email?: string) => void
 }
 
 let unlockTimer: ReturnType<typeof setTimeout> | null = null
@@ -85,6 +93,9 @@ export const useStore = create<AppState>((set, get) => ({
   connectionError: null,
 
   userName: 'Kevin',
+  userEmail: 'kevin@example.com',
+  userId: 'u1000000-0000-0000-0000-000000000001',
+  isAuthenticated: true,
   hasMonthlyPlan: false,
 
   selectedHub: 'Petra Christian University',
@@ -166,11 +177,11 @@ export const useStore = create<AppState>((set, get) => ({
     })
   },
 
-  triggerUnlock: async (source: string) => {
+  triggerUnlock: async (source: string, accessMethod: 'QR_SCAN' | 'REMOTE_APP' | 'RFID_TAP' = 'REMOTE_APP') => {
     const { lockerNumber } = get()
     const timeStr = new Date().toLocaleTimeString()
     const log = [
-      `[${timeStr}] Unlock triggered by ${source} (Supabase: is_door_open = true, 5s)`,
+      `[${timeStr}] Unlock triggered by ${source} (${accessMethod}) -> Supabase: door_command = UNLOCK (5s)`,
       ...get().lockerStatusLog,
     ].slice(0, 15)
 
@@ -180,8 +191,8 @@ export const useStore = create<AppState>((set, get) => ({
     // Update local store state immediately
     set({ lockerStatus: 'unlocked', isDoorOpen: true, lockerStatusLog: log })
 
-    // Call Supabase API to update is_door_open = true
-    triggerDoorUnlockRemote(lockerNumber).catch((e) => {
+    // Call Supabase API to update door_command = 'UNLOCK' & is_door_open = true
+    triggerDoorUnlockRemote(lockerNumber, accessMethod).catch((e) => {
       console.warn('triggerDoorUnlockRemote catch:', e)
     })
 
@@ -189,7 +200,7 @@ export const useStore = create<AppState>((set, get) => ({
     unlockTimer = setTimeout(() => {
       const relockTime = new Date().toLocaleTimeString()
       const log2 = [
-        `[${relockTime}] Door re-locked (Supabase: is_door_open = false)`,
+        `[${relockTime}] Auto-relocked (Supabase: door_command = LOCKED, is_door_open = false)`,
         ...get().lockerStatusLog,
       ].slice(0, 15)
       set({ lockerStatus: 'locked', isDoorOpen: false, lockerStatusLog: log2 })
@@ -252,8 +263,121 @@ export const useStore = create<AppState>((set, get) => ({
     })
   },
 
-  markNotificationsRead: () => set({ unreadNotifications: 0 }),
+  markNotificationsRead: () => {
+    if (get().unreadNotifications !== 0) {
+      set({ unreadNotifications: 0 })
+    }
+  },
 
   setConnectionStatus: (status, error = null) =>
     set({ connectionStatus: status, connectionError: error }),
+
+  loginUser: async (email, password) => {
+    try {
+      // 8-second timeout guard
+      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: { message: 'Connection timed out. Please check your network.' } }), 8000)
+      )
+
+      const authPromise = supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      })
+
+      const res = await Promise.race([authPromise, timeoutPromise])
+      const { data, error } = res as any
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      if (data?.user) {
+        const displayName = data.user.user_metadata?.full_name || email.split('@')[0]
+        set({
+          userName: displayName,
+          userEmail: data.user.email || email,
+          userId: data.user.id,
+          isAuthenticated: true,
+        })
+        return { success: true }
+      }
+
+      return { success: false, error: 'Login failed: no user returned.' }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return { success: false, error: msg }
+    }
+  },
+
+  registerUser: async (fullName, email, password) => {
+    try {
+      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: { message: 'Connection timed out. Please check your network.' } }), 8000)
+      )
+
+      const authPromise = supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+          },
+        },
+      })
+
+      const res = await Promise.race([authPromise, timeoutPromise])
+      const { data, error } = res as any
+
+      if (error) {
+        return { success: false, error: error.message }
+      }
+
+      if (data?.user) {
+        // If Supabase provided active session immediately (auto-confirmed)
+        if (data.session) {
+          set({
+            userName: fullName.trim(),
+            userEmail: data.user.email || email,
+            userId: data.user.id,
+            isAuthenticated: true,
+          })
+          return { success: true, needsEmailConfirmation: false }
+        }
+
+        // Email confirmation is required by Supabase: user must check inbox
+        return {
+          success: true,
+          needsEmailConfirmation: true,
+        }
+      }
+
+      return { success: true }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      return { success: false, error: msg }
+    }
+  },
+
+  logoutUser: async () => {
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.warn('Signout warning:', err)
+    }
+    set({
+      userName: 'Guest',
+      userEmail: '',
+      userId: null,
+      isAuthenticated: false,
+    })
+  },
+
+  loginDemo: (name = 'Kevin', email = 'kevin@example.com') => {
+    set({
+      userName: name,
+      userEmail: email,
+      userId: 'u1000000-0000-0000-0000-000000000001',
+      isAuthenticated: true,
+    })
+  },
 }))

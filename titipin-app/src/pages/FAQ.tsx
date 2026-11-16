@@ -4,8 +4,8 @@ import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react'
 
 const FAQ_ITEMS = [
   {
-    q: 'How do I open the locker?',
-    a: 'After booking, go to "My QR" in the app. You can open the locker by scanning the QR code at the locker panel, or by typing the 6-digit PIN on the keypad. You can also tap "Open locker" in the app to unlock it remotely.',
+    q: 'Bagaimana cara membuka kunci pintu loker?',
+    a: 'Setelah memesan loker, buka menu "Scan" di aplikasi HP lalu arahkan kamera ke kode QR yang tampil pada layar LCD TFT pintu loker fisik. Pintu akan langsung terbuka secara otomatis selama 5 detik. Sebagai cadangan jika HP kehabisan baterai/kendala sinyal, Anda dapat menempelkan kartu RFID terdaftar pada modul pembaca di pintu loker atau menekan tombol Remote Unlock di aplikasi.',
   },
   {
     q: 'What happens when my time is up?',

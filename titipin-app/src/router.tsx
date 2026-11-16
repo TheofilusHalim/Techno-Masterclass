@@ -13,6 +13,7 @@ import { Notifications } from './pages/Notifications'
 import { FAQ } from './pages/FAQ'
 import { LiveChatTopics } from './pages/LiveChatTopics'
 import { ChatSupport } from './pages/ChatSupport'
+import { Auth } from './pages/Auth'
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,8 @@ export const router = createBrowserRouter([
     element: <AppShell />,
     children: [
       { index: true, element: <Home /> },
+      { path: 'auth', element: <Auth /> },
+      { path: 'login', element: <Auth /> },
       { path: 'nearby-lockers', element: <NearbyLockers /> },
       { path: 'hub-detail', element: <HubDetail /> },
       { path: 'payment', element: <Payment /> },

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown } from 'lucide-react'
+import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown, LogIn, Shield, User } from 'lucide-react'
 import { useStore } from '../store/useStore'
 
 function formatIDR(amount: number) {
@@ -8,36 +8,66 @@ function formatIDR(amount: number) {
 
 export function Account() {
   const navigate = useNavigate()
-  const { userName, hasMonthlyPlan, subscribeMonthly } = useStore()
+  const { userName, userEmail, isAuthenticated, hasMonthlyPlan, subscribeMonthly, logoutUser } = useStore()
+
+  const handleLogout = async () => {
+    await logoutUser()
+    navigate('/auth')
+  }
 
   const menuItems = [
     { icon: Bell, label: 'Notifications', action: () => navigate('/notifications') },
     { icon: MessageSquare, label: 'Live chat', action: () => navigate('/live-chat') },
     { icon: HelpCircle, label: 'FAQ', action: () => navigate('/faq') },
     { icon: Globe, label: 'Language', action: () => {} },
-    { icon: LogOut, label: 'Log out', action: () => {}, danger: true },
+    ...(isAuthenticated
+      ? [{ icon: LogOut, label: 'Log out', action: handleLogout, danger: true }]
+      : [{ icon: LogIn, label: 'Sign In / Register', action: () => navigate('/auth'), highlight: true }]),
   ]
 
   return (
     <div className="flex flex-col min-h-full bg-white">
       {/* Header */}
       <div className="bg-green-700 px-4 pt-12 pb-8">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
-            {userName.charAt(0)}
+        {isAuthenticated ? (
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center text-white text-2xl font-bold shadow-lg border-2 border-green-300">
+              {userName ? userName.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-white text-xl font-bold">{userName}</p>
+                <span className="bg-green-600 text-green-100 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                  <Shield size={10} /> Verified
+                </span>
+              </div>
+              <p className="text-green-200 text-sm mt-0.5">{userEmail || 'kevin@example.com'}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-white text-xl font-bold">{userName}</p>
-            <p className="text-green-200 text-sm">kevin@example.com</p>
+        ) : (
+          <div className="text-center py-2">
+            <div className="w-16 h-16 rounded-full bg-green-800 text-green-200 flex items-center justify-center mx-auto mb-3">
+              <User size={30} />
+            </div>
+            <h2 className="text-white text-lg font-bold">You are not signed in</h2>
+            <p className="text-green-200 text-xs mt-1 mb-4">
+              Sign in to manage your bookings and unlock smart lockers
+            </p>
+            <button
+              onClick={() => navigate('/auth')}
+              className="px-6 py-2.5 bg-white text-green-800 rounded-xl text-xs font-bold shadow-md hover:bg-green-50 transition-all active:scale-95"
+            >
+              Sign In / Register
+            </button>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="flex-1 px-4 py-5 space-y-5">
         {/* Monthly Plan card */}
         <div className={`rounded-2xl p-4 border ${
           hasMonthlyPlan
-            ? 'bg-gradient-to-br from-green-700 to-green-800 border-green-600'
+            ? 'bg-gradient-to-br from-green-700 to-green-800 border-green-600 text-white'
             : 'bg-gray-50 border-gray-200'
         }`}>
           <div className="flex items-start justify-between mb-3">
@@ -65,38 +95,42 @@ export function Account() {
           {!hasMonthlyPlan && (
             <button
               onClick={subscribeMonthly}
-              className="w-full py-2.5 bg-green-700 text-white rounded-xl font-semibold text-sm hover:bg-green-800 transition-colors"
+              className="w-full py-2.5 bg-green-700 text-white rounded-xl font-semibold text-sm hover:bg-green-800 transition-colors shadow-sm"
             >
               Subscribe — {formatIDR(125000)}/month
             </button>
           )}
           {hasMonthlyPlan && (
-            <p className={`text-xs ${hasMonthlyPlan ? 'text-green-300' : 'text-gray-400'}`}>
+            <p className="text-xs text-green-300">
               Renews on 15 Dec 2026
             </p>
           )}
         </div>
 
         {/* Menu items */}
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden divide-y divide-gray-100">
-          {menuItems.map(({ icon: Icon, label, action, danger }) => (
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden divide-y divide-gray-100 shadow-xs">
+          {menuItems.map(({ icon: Icon, label, action, danger, highlight }: any) => (
             <button
               key={label}
               onClick={action}
               className={`w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors ${
-                danger ? 'text-red-500' : 'text-gray-700'
+                danger
+                  ? 'text-red-500'
+                  : highlight
+                  ? 'text-green-700 font-bold bg-green-50/50'
+                  : 'text-gray-700'
               }`}
             >
               <div className="flex items-center gap-3">
-                <Icon size={18} className={danger ? 'text-red-400' : 'text-gray-400'} />
+                <Icon size={18} className={danger ? 'text-red-400' : highlight ? 'text-green-600' : 'text-gray-400'} />
                 <span className="text-sm font-medium">{label}</span>
               </div>
-              {!danger && <ChevronRight size={16} className="text-gray-300" />}
+              {!danger && <ChevronRight size={16} className={highlight ? 'text-green-600' : 'text-gray-300'} />}
             </button>
           ))}
         </div>
 
-        <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.0 • Made with ❤️ in Surabaya</p>
+        <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.0 • Connected to Supabase Auth</p>
       </div>
     </div>
   )

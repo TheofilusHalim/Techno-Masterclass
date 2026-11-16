@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Clock, CheckCircle2, MapPin } from 'lucide-react'
 import { useStore } from '../store/useStore'
@@ -48,8 +49,10 @@ export function Notifications() {
   const navigate = useNavigate()
   const { markNotificationsRead } = useStore()
 
-  // Mark read when screen opens
-  markNotificationsRead()
+  // Mark read when screen opens safely inside useEffect
+  useEffect(() => {
+    markNotificationsRead()
+  }, [])
 
   return (
     <div className="flex flex-col min-h-full bg-white">

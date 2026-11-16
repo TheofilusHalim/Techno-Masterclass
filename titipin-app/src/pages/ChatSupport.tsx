@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft, Send } from 'lucide-react'
+import { useStore } from '../store/useStore'
 
 interface Message {
   id: number
@@ -29,6 +30,7 @@ function getTime() {
 export function ChatSupport() {
   const navigate = useNavigate()
   const location = useLocation()
+  const triggerUnlock = useStore((s) => s.triggerUnlock)
   const topic = (location.state as { topic?: string })?.topic ?? 'Other'
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -67,6 +69,12 @@ export function ChatSupport() {
       const idx = agentResponseIndex.current
       const response = responses[idx < responses.length ? idx : responses.length - 1]
       agentResponseIndex.current = idx + 1
+
+      // If CS says sending remote unlock signal, trigger hardware unlock in Supabase!
+      if (response && response.includes('remote unlock signal')) {
+        triggerUnlock('Customer Support CS_OVERRIDE', 'CS_OVERRIDE' as any)
+      }
+
       setMessages((prev) => [...prev, { id: Date.now(), from: 'agent', text: response, time: getTime() }])
     }, 1200 + Math.random() * 800)
   }
