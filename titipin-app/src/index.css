@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --color-green-primary: #15803d;
+  --color-green-dark: #166534;
+  --color-green-light: #dcfce7;
+  --color-green-mid: #22c55e;
+  --font-family-sans: 'Inter', system-ui, sans-serif;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: #f9fafb;
+  font-family: 'Inter', system-ui, sans-serif;
+  overscroll-behavior: none;
+}
+
+/* Scrollbar hide for clean mobile feel */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
