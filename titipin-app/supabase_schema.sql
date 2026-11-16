@@ -120,6 +120,9 @@ create table if not exists public.lockers (
   -- RFID fallback tag UID (backup access method)
   rfid_uid        text,                     -- e.g. "A3:F2:9C:11"
 
+  -- Physical door state (true = unlocked/open for 5s, false = locked)
+  is_door_open    boolean not null default false,
+
   -- Current booking that has this locker occupied
   current_booking_id  uuid,                 -- FK set after insert on bookings
 

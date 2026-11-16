@@ -43,6 +43,7 @@ export interface Locker {
   locker_number: string
   size: LockerSize
   status: LockerStatus
+  is_door_open?: boolean
   qr_payload: string | null   // e.g. "TITIPIN:UK_PETRA:M-07" — displayed on TFT LCD
   rfid_uid: string | null     // RFID fallback
   current_booking_id: string | null

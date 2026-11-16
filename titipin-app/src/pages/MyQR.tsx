@@ -52,7 +52,7 @@ function QRCodeSVG({ value }: { value: string }) {
 
 export function MyQR() {
   const navigate = useNavigate()
-  const { lockerNumber, lockerSize, lockerLocation, remainingSeconds, qrRefreshSeconds, tickQRTimer, tickLockerTimer, triggerUnlock } = useStore()
+  const { lockerNumber, lockerSize, lockerLocation, remainingSeconds, qrRefreshSeconds, tickQRTimer, tickLockerTimer, triggerUnlock, isDoorOpen } = useStore()
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -132,10 +132,15 @@ export function MyQR() {
           </div>
           <button
             onClick={() => triggerUnlock('Test open (QR screen)')}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-green-700 text-white rounded-xl font-semibold text-sm hover:bg-green-800 active:scale-95 transition-all shadow-sm"
+            disabled={isDoorOpen}
+            className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all shadow-sm ${
+              isDoorOpen
+                ? 'bg-green-600 text-white animate-pulse'
+                : 'bg-green-700 text-white hover:bg-green-800 active:scale-95'
+            }`}
           >
             <Zap size={16} />
-            Test open
+            {isDoorOpen ? 'Door Unlocked (5s)...' : 'Test open'}
           </button>
         </div>
       </div>

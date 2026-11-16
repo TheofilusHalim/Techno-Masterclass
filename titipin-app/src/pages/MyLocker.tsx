@@ -7,7 +7,7 @@ import { formatTime } from '../utils/time'
 export function MyLocker() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<'active' | 'finished'>('active')
-  const { hasActiveLocker, lockerNumber, lockerSize, lockerLocation, remainingSeconds, tickLockerTimer, extendLocker, triggerUnlock } = useStore()
+  const { hasActiveLocker, lockerNumber, lockerSize, lockerLocation, remainingSeconds, tickLockerTimer, extendLocker, triggerUnlock, isDoorOpen } = useStore()
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -87,10 +87,15 @@ export function MyLocker() {
                   </button>
                   <button
                     onClick={() => triggerUnlock('Open locker button')}
-                    className="flex items-center justify-center gap-2 py-3 bg-white text-green-700 hover:bg-green-50 active:scale-95 rounded-xl font-semibold text-sm transition-all shadow-sm"
+                    disabled={isDoorOpen}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all shadow-sm ${
+                      isDoorOpen
+                        ? 'bg-green-300 text-green-950 font-bold animate-pulse'
+                        : 'bg-white text-green-700 hover:bg-green-50 active:scale-95'
+                    }`}
                   >
-                    <Unlock size={16} />
-                    Open locker
+                    <Unlock size={16} className={isDoorOpen ? 'animate-bounce' : ''} />
+                    {isDoorOpen ? 'Door Open (5s)' : 'Open locker'}
                   </button>
                 </div>
               </div>

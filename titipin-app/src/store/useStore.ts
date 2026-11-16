@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { triggerDoorUnlockRemote } from '../lib/lockerService'
 
 export interface Transaction {
   id: string
@@ -13,6 +14,7 @@ export interface Transaction {
 }
 
 export type LockerStatus = 'locked' | 'unlocked' | 'idle'
+export type ConnectionStatus = 'connected' | 'connecting' | 'error'
 
 interface AppState {
   // Active locker session
@@ -23,7 +25,12 @@ interface AppState {
   remainingSeconds: number
   qrRefreshSeconds: number
   lockerStatus: LockerStatus
+  isDoorOpen: boolean
   lockerStatusLog: string[]
+
+  // Supabase connection state
+  connectionStatus: ConnectionStatus
+  connectionError: string | null
 
   // User & plan
   userName: string
@@ -31,6 +38,7 @@ interface AppState {
 
   // Booking flow state
   selectedHub: string
+  selectedHubId: string
   selectedSize: 'S' | 'M' | 'L'
   selectedMode: 'per-hour' | 'subscription'
   selectedDuration: number
@@ -46,15 +54,19 @@ interface AppState {
   tickLockerTimer: () => void
   tickQRTimer: () => void
   extendLocker: () => void
-  triggerUnlock: (source: string) => void
-  setSelectedHub: (hub: string) => void
+  triggerUnlock: (source: string) => Promise<void>
+  setDoorOpenFromRealtime: (isOpen: boolean, source?: string) => void
+  setSelectedHub: (hub: string, hubId?: string) => void
   setSelectedSize: (size: 'S' | 'M' | 'L') => void
   setSelectedMode: (mode: 'per-hour' | 'subscription') => void
   setSelectedDuration: (dur: number) => void
   addTransaction: (tx: Transaction) => void
   subscribeMonthly: () => void
   markNotificationsRead: () => void
+  setConnectionStatus: (status: ConnectionStatus, error?: string | null) => void
 }
+
+let unlockTimer: ReturnType<typeof setTimeout> | null = null
 
 export const useStore = create<AppState>((set, get) => ({
   hasActiveLocker: true,
@@ -64,12 +76,19 @@ export const useStore = create<AppState>((set, get) => ({
   remainingSeconds: 6712, // ~01:51:52
   qrRefreshSeconds: 60,
   lockerStatus: 'idle',
-  lockerStatusLog: ['System initialized'],
+  isDoorOpen: false,
+  lockerStatusLog: [
+    `[${new Date().toLocaleTimeString()}] Supabase client initialized`,
+  ],
+
+  connectionStatus: 'connected',
+  connectionError: null,
 
   userName: 'Kevin',
   hasMonthlyPlan: false,
 
   selectedHub: 'Petra Christian University',
+  selectedHubId: 'a1000000-0000-0000-0000-000000000001',
   selectedSize: 'M',
   selectedMode: 'per-hour',
   selectedDuration: 2,
@@ -147,17 +166,70 @@ export const useStore = create<AppState>((set, get) => ({
     })
   },
 
-  triggerUnlock: (source: string) => {
-    const log = [`[${new Date().toLocaleTimeString()}] Unlock triggered by ${source}`, ...get().lockerStatusLog].slice(0, 10)
-    set({ lockerStatus: 'unlocked', lockerStatusLog: log })
-    setTimeout(() => {
-      const log2 = [`[${new Date().toLocaleTimeString()}] Door re-locked automatically`, ...get().lockerStatusLog].slice(0, 10)
-      set({ lockerStatus: 'locked', lockerStatusLog: log2 })
-      setTimeout(() => set({ lockerStatus: 'idle' }), 2000)
+  triggerUnlock: async (source: string) => {
+    const { lockerNumber } = get()
+    const timeStr = new Date().toLocaleTimeString()
+    const log = [
+      `[${timeStr}] Unlock triggered by ${source} (Supabase: is_door_open = true, 5s)`,
+      ...get().lockerStatusLog,
+    ].slice(0, 15)
+
+    // Clear any pending timer
+    if (unlockTimer) clearTimeout(unlockTimer)
+
+    // Update local store state immediately
+    set({ lockerStatus: 'unlocked', isDoorOpen: true, lockerStatusLog: log })
+
+    // Call Supabase API to update is_door_open = true
+    triggerDoorUnlockRemote(lockerNumber).catch((e) => {
+      console.warn('triggerDoorUnlockRemote catch:', e)
+    })
+
+    // Set 5-second auto-relock in local state
+    unlockTimer = setTimeout(() => {
+      const relockTime = new Date().toLocaleTimeString()
+      const log2 = [
+        `[${relockTime}] Door re-locked (Supabase: is_door_open = false)`,
+        ...get().lockerStatusLog,
+      ].slice(0, 15)
+      set({ lockerStatus: 'locked', isDoorOpen: false, lockerStatusLog: log2 })
+
+      setTimeout(() => {
+        set({ lockerStatus: 'idle' })
+      }, 2000)
     }, 5000)
   },
 
-  setSelectedHub: (hub) => set({ selectedHub: hub }),
+  setDoorOpenFromRealtime: (isOpen: boolean, source?: string) => {
+    const currentOpen = get().isDoorOpen
+    if (currentOpen === isOpen) return
+
+    const timeStr = new Date().toLocaleTimeString()
+    const label = source || 'Supabase Realtime'
+    const newStatus: LockerStatus = isOpen ? 'unlocked' : 'locked'
+
+    const log = [
+      `[${timeStr}] ${label} -> Door ${isOpen ? 'OPEN' : 'CLOSED'}`,
+      ...get().lockerStatusLog,
+    ].slice(0, 15)
+
+    set({
+      isDoorOpen: isOpen,
+      lockerStatus: newStatus,
+      lockerStatusLog: log,
+    })
+
+    if (!isOpen) {
+      setTimeout(() => set({ lockerStatus: 'idle' }), 2000)
+    }
+  },
+
+  setSelectedHub: (hub, hubId) =>
+    set({
+      selectedHub: hub,
+      selectedHubId: hubId || get().selectedHubId,
+    }),
+
   setSelectedSize: (size) => set({ selectedSize: size }),
   setSelectedMode: (mode) => set({ selectedMode: mode }),
   setSelectedDuration: (dur) => set({ selectedDuration: dur }),
@@ -181,4 +253,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   markNotificationsRead: () => set({ unreadNotifications: 0 }),
+
+  setConnectionStatus: (status, error = null) =>
+    set({ connectionStatus: status, connectionError: error }),
 }))
