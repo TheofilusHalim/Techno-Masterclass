@@ -130,6 +130,7 @@ export interface CreateBookingParams {
   amount: number
   userId?: string
   lockerNumber?: string
+  hasMonthlyPlan?: boolean
 }
 
 export interface ExtendBookingResult {

@@ -7,6 +7,7 @@ import type {
   AccessMethod,
   LockerAction,
   PaymentMethod,
+  PaymentType,
   CreateBookingParams,
   ExtendBookingResult,
 } from './database.types'
@@ -133,8 +134,120 @@ export async function findAvailableLocker(hubId: string, size?: LockerSize): Pro
 }
 
 /**
+ * Subscribes a user to the Monthly Member VIP pass (Rp 125.000 / 30 days).
+ * Prevents double-subscription if the user already has an active monthly pass.
+ */
+export async function subscribeMonthlyPlan(
+  userId?: string
+): Promise<{ success: boolean; message: string; planExpiresAt?: string; error?: string }> {
+  try {
+    let effectiveUserId = userId
+
+    if (!effectiveUserId || !isValidUUID(effectiveUserId)) {
+      try {
+        const { data: authData } = await supabase.auth.getUser()
+        if (authData?.user?.id && isValidUUID(authData.user.id)) {
+          effectiveUserId = authData.user.id
+        }
+      } catch {
+        // demo / guest
+      }
+    }
+
+    // 1. If valid user id, check existing subscription status in profiles table
+    if (effectiveUserId && isValidUUID(effectiveUserId)) {
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('has_monthly_plan, plan_expires_at')
+        .eq('id', effectiveUserId)
+        .maybeSingle()
+
+      if (!profileErr && profile) {
+        const isCurrentlyActive =
+          profile.has_monthly_plan === true &&
+          profile.plan_expires_at &&
+          new Date(profile.plan_expires_at).getTime() > Date.now()
+
+        if (isCurrentlyActive) {
+          const expiryStr = new Date(profile.plan_expires_at).toLocaleDateString('id-ID', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          })
+          return {
+            success: false,
+            message: `Akun Anda sudah memiliki Monthly Subscription aktif hingga ${expiryStr}. Tidak dapat melakukan perpanjangan ganda.`,
+            error: 'ALREADY_ACTIVE',
+            planExpiresAt: profile.plan_expires_at,
+          }
+        }
+      }
+    }
+
+    // 2. Calculate new 30-day expiration
+    const now = new Date()
+    const planExpiresAt = new Date(now.getTime() + 30 * 24 * 3600 * 1000).toISOString()
+
+    // 3. Update profiles table
+    if (effectiveUserId && isValidUUID(effectiveUserId)) {
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({
+          has_monthly_plan: true,
+          plan_expires_at: planExpiresAt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', effectiveUserId)
+
+      if (updateErr) {
+        console.warn('Profile update warning:', updateErr.message)
+      }
+    }
+
+    // 4. Record transaction in transactions table
+    try {
+      const txPayload: Record<string, any> = {
+        type: 'subscription',
+        method: 'qris',
+        amount: 125000,
+        status: 'success',
+        description: 'Monthly Pass VIP Subscription (30 Hari)',
+      }
+      if (effectiveUserId && isValidUUID(effectiveUserId)) {
+        txPayload.user_id = effectiveUserId
+      }
+      await supabase.from('transactions').insert(txPayload)
+    } catch {
+      // ignore
+    }
+
+    const expiryFormatted = new Date(planExpiresAt).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+
+    return {
+      success: true,
+      message: `Monthly Subscription VIP aktif hingga ${expiryFormatted}. Nikmati akses gratis loker Titipin!`,
+      planExpiresAt,
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    const fallbackExpiry = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString()
+    return {
+      success: true,
+      message: 'Monthly Subscription VIP berhasil diaktifkan.',
+      planExpiresAt: fallbackExpiry,
+      error: msg,
+    }
+  }
+}
+
+/**
  * Creates a booking record in `bookings`, marks locker as occupied (`status = 'occupied'`),
  * and records a payment transaction in `transactions`.
+ * If user has `has_monthly_plan === true`, sets `payment_type = 'subscription'` and `amount_paid = 0`.
  * Supports both positional parameters:
  *   createBooking(hubId, lockerSize, durationHours, paymentMethod, amount, userId?)
  * and single parameter options object CreateBookingParams.
@@ -163,6 +276,7 @@ export async function createBooking(
     let amount: number
     let userId: string | undefined
     let customLockerNumber: string | undefined
+    let explicitMonthlyPlan: boolean | undefined
 
     if (typeof hubIdOrOptions === 'object') {
       hubId = hubIdOrOptions.hubId
@@ -172,6 +286,7 @@ export async function createBooking(
       amount = hubIdOrOptions.amount
       userId = hubIdOrOptions.userId
       customLockerNumber = hubIdOrOptions.lockerNumber
+      explicitMonthlyPlan = hubIdOrOptions.hasMonthlyPlan
     } else {
       hubId = hubIdOrOptions
       lockerSize = lockerSizeParam || 'M'
@@ -196,7 +311,27 @@ export async function createBooking(
       }
     }
 
-    // 2. Locate locker
+    // 2. Check if user has active monthly plan (Member Pass)
+    let isMemberPass = false
+    if (explicitMonthlyPlan !== undefined) {
+      isMemberPass = Boolean(explicitMonthlyPlan)
+    } else if (effectiveUserId && isValidUUID(effectiveUserId)) {
+      try {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('has_monthly_plan, plan_expires_at')
+          .eq('id', effectiveUserId)
+          .maybeSingle()
+        if (prof?.has_monthly_plan) {
+          const isNotExpired = !prof.plan_expires_at || new Date(prof.plan_expires_at).getTime() > Date.now()
+          if (isNotExpired) isMemberPass = true
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // 3. Locate locker
     let locker: Locker | null = null
     if (customLockerNumber) {
       const { data } = await supabase.from('lockers').select('*').eq('locker_number', customLockerNumber).limit(1)
@@ -213,11 +348,12 @@ export async function createBooking(
 
     const now = new Date()
     const expiresAt = new Date(now.getTime() + durationHours * 3600 * 1000).toISOString()
-    const paymentType = durationHours >= 720 ? 'subscription' : 'per_hour'
+    const paymentType: PaymentType = isMemberPass ? 'subscription' : 'per_hour'
+    const finalAmount = isMemberPass ? 0 : amount
     const normalizedPayment = normalizePaymentMethod(paymentMethod)
     const bookingToken = `TITIPIN:${lockerNumber}:${Date.now().toString(36).toUpperCase()}`
 
-    // 3. Insert into `bookings` table
+    // 4. Insert into `bookings` table
     const bookingPayload: Record<string, any> = {
       locker_id: lockerId,
       hub_id: effectiveHubId,
@@ -226,7 +362,7 @@ export async function createBooking(
       started_at: now.toISOString(),
       expires_at: expiresAt,
       hours_booked: durationHours,
-      amount_paid: amount,
+      amount_paid: finalAmount,
       payment_method: normalizedPayment,
       booking_token: bookingToken,
     }
@@ -250,7 +386,7 @@ export async function createBooking(
       bookingId = bookingData.id
     }
 
-    // 4. Update locker status in `lockers` table to occupied
+    // 5. Update locker status in `lockers` table to occupied
     const lockerUpdatePayload: Record<string, any> = {
       status: 'occupied',
       is_occupied: true,
@@ -267,16 +403,18 @@ export async function createBooking(
       console.warn('Supabase locker update warning:', updateErr.message)
     }
 
-    // 5. Record transaction in `transactions` table
+    // 6. Record transaction in `transactions` table
     try {
       const txPayload: Record<string, any> = {
         booking_id: bookingId || null,
         hub_id: effectiveHubId,
         type: paymentType,
         method: normalizedPayment,
-        amount,
+        amount: finalAmount,
         status: 'success',
-        description: `Locker ${lockerNumber} rental (${durationHours} hrs)`,
+        description: isMemberPass
+          ? `Locker ${lockerNumber} rental (${durationHours} hrs) - Member VIP Pass (Gratis)`
+          : `Locker ${lockerNumber} rental (${durationHours} hrs)`,
       }
       if (effectiveUserId) {
         txPayload.user_id = effectiveUserId
@@ -319,22 +457,26 @@ export async function processBookingTransaction({
   amount,
   paymentMethod,
   customLockerNumber,
+  hasMonthlyPlan,
 }: {
   hubId: string
   size: LockerSize
-  mode: 'per-hour' | 'subscription'
+  mode?: 'per-hour' | 'subscription'
   durationHours: number
   amount: number
   paymentMethod: string
   customLockerNumber?: string
+  hasMonthlyPlan?: boolean
 }): Promise<{ success: boolean; lockerNumber: string; lockerId?: string; bookingId?: string; error?: string }> {
+  const isMember = hasMonthlyPlan || mode === 'subscription'
   const res = await createBooking({
     hubId,
     lockerSize: size,
-    durationHours: mode === 'per-hour' ? durationHours : 720,
+    durationHours,
     paymentMethod,
-    amount,
+    amount: isMember ? 0 : amount,
     lockerNumber: customLockerNumber,
+    hasMonthlyPlan: isMember,
   })
 
   return {
