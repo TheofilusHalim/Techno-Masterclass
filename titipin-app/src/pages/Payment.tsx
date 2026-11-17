@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, MapPin, Package, Clock, CheckCircle2, ShieldCheck, AlertCircle, Sparkles } from 'lucide-react'
+import { ArrowLeft, MapPin, Package, Clock, CheckCircle2, ShieldCheck, AlertCircle, Sparkles, Crown } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { processBookingTransaction } from '../lib/lockerService'
 
@@ -44,11 +44,10 @@ export function Payment() {
     selectedHub,
     selectedHubId,
     selectedSize,
-    selectedMode,
     selectedDuration,
     setActiveLocker,
     addTransaction,
-    subscribeMonthly,
+    hasMonthlyPlan,
   } = useStore()
 
   const [selectedPayment, setSelectedPayment] = useState('qris')
@@ -57,22 +56,27 @@ export function Payment() {
 
   const sizeInfo = SIZES_CONFIG[selectedSize] || SIZES_CONFIG['M']
   const hourlyRate = sizeInfo.rate
-  const monthlyRate = 125000
-  const amount = selectedMode === 'per-hour' ? selectedDuration * hourlyRate : monthlyRate
+
+  // Check if current booking is fully covered by Monthly Pass (S and M lockers)
+  const isCoveredByMonthlyPass = hasMonthlyPlan && (selectedSize === 'S' || selectedSize === 'M')
+  const amount = isCoveredByMonthlyPass ? 0 : selectedDuration * hourlyRate
 
   const handlePay = async () => {
     setLoading(true)
     setErrorMsg(null)
 
     try {
+      const paymentMethodUsed = isCoveredByMonthlyPass ? 'subscription' : selectedPayment
+      const paymentType = isCoveredByMonthlyPass ? 'subscription' : 'per-hour'
+
       // 1. Process booking and occupy locker in Supabase
       const res = await processBookingTransaction({
         hubId: selectedHubId || 'a1000000-0000-0000-0000-000000000001',
         size: selectedSize,
-        mode: selectedMode,
+        mode: paymentType,
         durationHours: selectedDuration,
         amount,
-        paymentMethod: selectedPayment,
+        paymentMethod: paymentMethodUsed,
       })
 
       const assignedLockerNumber = res.lockerNumber || (selectedSize === 'L' ? 'L-01' : selectedSize === 'S' ? 'S-01' : 'M-07')
@@ -82,33 +86,28 @@ export function Payment() {
         lockerNumber: assignedLockerNumber,
         lockerSize: selectedSize,
         lockerLocation: selectedHub,
-        duration: selectedMode === 'per-hour' ? selectedDuration : 720,
+        duration: selectedDuration,
       })
 
-      // 3. If subscription, mark subscription in store
-      if (selectedMode === 'subscription') {
-        subscribeMonthly()
-      } else {
-        // 4. Log transaction locally
-        addTransaction({
-          id: res.bookingId ? `bk-${res.bookingId.slice(0, 8)}` : `tx-${Date.now()}`,
-          date: new Date().toISOString().split('T')[0],
-          location: selectedHub,
-          lockerSize: selectedSize,
-          lockerNumber: assignedLockerNumber,
-          duration: selectedDuration,
-          amount,
-          type: 'per-hour',
-          status: 'success',
-        })
-      }
+      // 3. Log transaction locally
+      addTransaction({
+        id: res.bookingId ? `bk-${res.bookingId.slice(0, 8)}` : `tx-${Date.now()}`,
+        date: new Date().toISOString().split('T')[0],
+        location: selectedHub,
+        lockerSize: selectedSize,
+        lockerNumber: assignedLockerNumber,
+        duration: selectedDuration,
+        amount,
+        type: isCoveredByMonthlyPass ? 'subscription' : 'per-hour',
+        status: 'success',
+      })
 
-      // 5. Redirect to success screen (<3 clicks journey complete)
+      // 4. Redirect to success screen (<3 clicks journey complete)
       navigate('/success', { replace: true })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('Payment processing failed:', msg)
-      setErrorMsg('Mode offline: Pembayaran tetap diverifikasi untuk sesi demo.')
+      setErrorMsg('Mode offline: Pemesanan tetap diverifikasi untuk sesi demo.')
 
       // Still navigate gracefully for the demo experience
       setTimeout(() => {
@@ -132,8 +131,12 @@ export function Payment() {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="text-xl font-bold tracking-tight">Pembayaran</h1>
-            <p className="text-green-200 text-xs mt-0.5">Transaksi aman & aktivasi IoT loker instan</p>
+            <h1 className="text-xl font-bold tracking-tight">
+              {isCoveredByMonthlyPass ? 'Konfirmasi Sewa (Member Pass)' : 'Pembayaran'}
+            </h1>
+            <p className="text-green-200 text-xs mt-0.5">
+              {isCoveredByMonthlyPass ? 'Benefit Member VIP: Tanpa biaya jam sewa' : 'Transaksi aman & aktivasi IoT loker instan'}
+            </p>
           </div>
         </div>
       </div>
@@ -148,8 +151,8 @@ export function Payment() {
               { icon: Package, label: 'Ukuran Loker', value: `Size ${selectedSize} (${sizeInfo.label})` },
               {
                 icon: Clock,
-                label: 'Opsi Sewa',
-                value: selectedMode === 'per-hour' ? `${selectedDuration} Jam (Tarif: ${formatIDR(hourlyRate)}/jam)` : 'Paket Bulanan (Unlimited)',
+                label: 'Durasi Sewa',
+                value: `${selectedDuration} Jam (Tarif Normal: ${formatIDR(hourlyRate)}/jam)`,
               },
             ].map(({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-start gap-3">
@@ -164,57 +167,89 @@ export function Payment() {
             <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
               <div>
                 <span className="text-sm font-extrabold text-gray-800">Total Tagihan</span>
-                <p className="text-[10px] text-gray-500">Termasuk integrasi IoT Supabase</p>
+                <p className="text-[10px] text-gray-500">
+                  {isCoveredByMonthlyPass ? 'Ditanggung Kuota Member VIP' : 'Termasuk integrasi IoT Supabase'}
+                </p>
               </div>
-              <span className="text-xl font-black text-green-700">{formatIDR(amount)}</span>
+              <div className="text-right">
+                <span className={`text-xl font-black ${isCoveredByMonthlyPass ? 'text-emerald-700' : 'text-green-700'}`}>
+                  {formatIDR(amount)}
+                </span>
+                {isCoveredByMonthlyPass && (
+                  <p className="text-[10px] text-gray-400 line-through">
+                    {formatIDR(selectedDuration * hourlyRate)}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Payment methods */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-bold">Pilih Metode Pembayaran</p>
-            <span className="text-[11px] text-green-700 font-semibold flex items-center gap-1">
-              <Sparkles size={12} /> Instan & Bebas Admin
-            </span>
+        {/* Payment Methods or Member Pass Benefit Card */}
+        {isCoveredByMonthlyPass ? (
+          <div className="bg-gradient-to-br from-emerald-50 to-green-100 border-2 border-emerald-300 rounded-2xl p-4 shadow-xs">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                <Crown size={22} className="text-amber-300" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-sm font-extrabold text-emerald-950">Gunakan Kuota Member VIP</p>
+                  <span className="text-[10px] bg-emerald-700 text-white font-bold px-2 py-0.5 rounded-full">
+                    Rp 0
+                  </span>
+                </div>
+                <p className="text-xs text-emerald-800 leading-relaxed">
+                  Langganan bulanan Anda aktif. Biaya sewa loker Size <strong>{selectedSize}</strong> selama <strong>{selectedDuration} jam</strong> sepenuhnya gratis!
+                </p>
+              </div>
+            </div>
           </div>
+        ) : (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-gray-500 uppercase tracking-wider font-bold">Pilih Metode Pembayaran</p>
+              <span className="text-[11px] text-green-700 font-semibold flex items-center gap-1">
+                <Sparkles size={12} /> Instan & Bebas Admin
+              </span>
+            </div>
 
-          <div className="space-y-2.5">
-            {PAYMENT_METHODS.map(({ key, label, desc, icon, badge }) => {
-              const isSelected = selectedPayment === key
-              return (
-                <button
-                  key={key}
-                  onClick={() => setSelectedPayment(key)}
-                  className={`w-full flex items-center gap-3.5 p-3.5 rounded-2xl border-2 transition-all text-left min-h-[56px] ${
-                    isSelected
-                      ? 'border-green-600 bg-green-50/70 shadow-sm ring-1 ring-green-600'
-                      : 'border-gray-200 bg-white hover:border-green-300'
-                  }`}
-                >
-                  <span className="text-2xl flex-shrink-0">{icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <p className="text-sm font-bold text-gray-900">{label}</p>
-                      <span className="text-[10px] font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
-                        {badge}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 truncate">{desc}</p>
-                  </div>
-                  <div
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                      isSelected ? 'border-green-600 bg-green-600' : 'border-gray-300'
+            <div className="space-y-2.5">
+              {PAYMENT_METHODS.map(({ key, label, desc, icon, badge }) => {
+                const isSelected = selectedPayment === key
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setSelectedPayment(key)}
+                    className={`w-full flex items-center gap-3.5 p-3.5 rounded-2xl border-2 transition-all text-left min-h-[56px] ${
+                      isSelected
+                        ? 'border-green-600 bg-green-50/70 shadow-sm ring-1 ring-green-600'
+                        : 'border-gray-200 bg-white hover:border-green-300'
                     }`}
                   >
-                    {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
-                  </div>
-                </button>
-              )
-            })}
+                    <span className="text-2xl flex-shrink-0">{icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <p className="text-sm font-bold text-gray-900">{label}</p>
+                        <span className="text-[10px] font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                          {badge}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 truncate">{desc}</p>
+                    </div>
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                        isSelected ? 'border-green-600 bg-green-600' : 'border-gray-300'
+                      }`}
+                    >
+                      {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Security badge */}
         <div className="flex items-center gap-2.5 text-xs text-gray-600 bg-gray-50 p-3.5 rounded-2xl border border-gray-200">
@@ -244,6 +279,11 @@ export function Payment() {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
               <span>Memproses IoT Booking...</span>
+            </>
+          ) : isCoveredByMonthlyPass ? (
+            <>
+              <CheckCircle2 size={18} />
+              <span>Gunakan Kuota Member (Rp 0)</span>
             </>
           ) : (
             <>

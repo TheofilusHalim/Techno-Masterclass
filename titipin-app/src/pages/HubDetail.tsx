@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, MapPin, Package, Minus, Plus, ShieldCheck, Clock, Check, AlertCircle } from 'lucide-react'
+import { ArrowLeft, MapPin, Minus, Plus, ShieldCheck, Clock, Check, AlertCircle, Crown, Sparkles } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { supabase } from '../lib/supabase'
 
 export interface SizeOption {
   key: 'S' | 'M' | 'L'
-  label: string
   subtitle: string
   desc: string
   rate: number
@@ -18,9 +17,8 @@ export interface SizeOption {
 const SIZE_OPTIONS: SizeOption[] = [
   {
     key: 'S',
-    label: 'Small',
-    subtitle: 'Tas Ransel / Laptop Bag',
-    desc: 'Backpack 15-20L, buku kampus, helm half-face, barang bawaan harian',
+    subtitle: 'Tas Ransel / Laptop s.d. 16"',
+    desc: 'Backpack 15-20L, buku kuliah, helm half-face, barang bawaan harian',
     rate: 2000,
     emoji: '🎒',
     dimensions: '30 × 40 × 45 cm',
@@ -28,23 +26,21 @@ const SIZE_OPTIONS: SizeOption[] = [
   },
   {
     key: 'M',
-    label: 'Medium',
-    subtitle: 'Koper Kabin / 2 Tas Ransel',
-    desc: 'Koper kabin 20 inch, ransel besar, tas belanja, atau jaket tebal',
+    subtitle: 'Helm Full-Face, Jaket & Koper Kabin',
+    desc: 'Koper kabin 20 inch, helm full-face, tas belanja, atau ransel besar',
     rate: 3000,
     emoji: '💼',
     dimensions: '45 × 50 × 55 cm',
-    idealFor: 'Short trip & aktivitas seharian',
+    idealFor: 'Short trip & helm motor',
   },
   {
     key: 'L',
-    label: 'Large',
-    subtitle: 'Koper 28-32" / 60L Carrier Bag',
-    desc: 'Muat carrier ransel gunung 60L+ atau koper bagasi besar. Pas untuk Melina & Traveller!',
+    subtitle: 'Carrier 60-80L / Koper 28-32"',
+    desc: 'Muat carrier ransel gunung 60-80L atau koper bagasi besar. Pas untuk Melina & Traveller!',
     rate: 5000,
     emoji: '🧳',
     dimensions: '60 × 75 × 65 cm',
-    idealFor: 'Traveller, turis & tas carrier besar',
+    idealFor: 'Traveller, turis & carrier besar',
   },
 ]
 
@@ -58,8 +54,8 @@ export function HubDetail() {
     selectedHub,
     selectedHubId,
     selectedSize, setSelectedSize,
-    selectedMode, setSelectedMode,
     selectedDuration, setSelectedDuration,
+    hasMonthlyPlan,
   } = useStore()
 
   // Live locker availability slots state
@@ -122,20 +118,21 @@ export function HubDetail() {
   }, [selectedHubId, selectedSize, setSelectedSize])
 
   const selectedOption = SIZE_OPTIONS.find((s) => s.key === selectedSize) || SIZE_OPTIONS[1]
-  const hourlyRate = selectedOption.rate
-  const monthlyRate = 125000
-  const total = selectedMode === 'per-hour' ? selectedDuration * hourlyRate : monthlyRate
+  const baseHourlyRate = selectedOption.rate
+
+  // Monthly Pass Benefit Check: covers S and M lockers. Size L is billed per hour.
+  const isCoveredByMonthlyPass = hasMonthlyPlan && (selectedSize === 'S' || selectedSize === 'M')
+  const total = isCoveredByMonthlyPass ? 0 : selectedDuration * baseHourlyRate
 
   // Check validity of selection
   const isSelectedSizeOutOfStock = availableSlots[selectedSize] === 0
-  const isSelectedSizeSubDisabled = selectedMode === 'subscription' && selectedSize === 'L'
-  const isCtaDisabled = isSelectedSizeOutOfStock || isSelectedSizeSubDisabled
+  const isCtaDisabled = isSelectedSizeOutOfStock
 
   return (
     <div className="flex flex-col min-h-full bg-white">
       {/* Header */}
       <div className="bg-green-700 px-4 pt-12 pb-5 text-white shadow-sm">
-        <div className="flex items-center gap-3 mb-3">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
             aria-label="Kembali"
@@ -144,7 +141,7 @@ export function HubDetail() {
             <ArrowLeft size={18} />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold tracking-tight">Hub Detail</h1>
+            <h1 className="text-xl font-bold tracking-tight">Pilih Loker di Hub</h1>
             <p className="text-green-200 text-xs flex items-center gap-1 mt-0.5 truncate">
               <MapPin size={12} className="flex-shrink-0" />
               <span>{selectedHub}</span>
@@ -152,22 +149,18 @@ export function HubDetail() {
           </div>
         </div>
 
-        {/* Rental Mode Toggle */}
-        <div className="flex bg-green-800/90 p-1 rounded-xl mt-1 border border-green-600/40">
-          {(['per-hour', 'subscription'] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setSelectedMode(mode)}
-              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                selectedMode === mode
-                  ? 'bg-white text-green-800 shadow-sm'
-                  : 'text-green-200 hover:text-white'
-              }`}
-            >
-              {mode === 'per-hour' ? 'Per Jam (Fleksibel)' : 'Langganan Bulanan'}
-            </button>
-          ))}
-        </div>
+        {/* Member status banner if active */}
+        {hasMonthlyPlan && (
+          <div className="mt-3 bg-green-800/90 border border-green-500/50 rounded-xl px-3 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Crown size={15} className="text-amber-300" />
+              <span className="text-xs font-bold text-white">Member VIP Aktif</span>
+            </div>
+            <span className="text-[10px] bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full font-bold">
+              Size S & M Bebas Biaya
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 px-4 py-5 space-y-5 overflow-y-auto">
@@ -190,19 +183,18 @@ export function HubDetail() {
             {SIZE_OPTIONS.map(({ key, subtitle, desc, rate, emoji, dimensions, idealFor }) => {
               const freeCount = availableSlots[key] ?? 0
               const isOutOfStock = freeCount === 0
-              const isSubscriptionRestricted = selectedMode === 'subscription' && key === 'L'
-              const isDisabled = isOutOfStock || isSubscriptionRestricted
-              const isSelected = selectedSize === key && !isDisabled
+              const isSelected = selectedSize === key && !isOutOfStock
+              const isSizeCovered = hasMonthlyPlan && (key === 'S' || key === 'M')
 
               return (
                 <button
                   key={key}
-                  disabled={isDisabled}
+                  disabled={isOutOfStock}
                   onClick={() => setSelectedSize(key)}
                   className={`w-full text-left p-3.5 rounded-2xl border-2 transition-all relative ${
                     isSelected
                       ? 'border-green-600 bg-green-50/70 shadow-sm ring-1 ring-green-600'
-                      : isDisabled
+                      : isOutOfStock
                       ? 'border-gray-200 bg-gray-50/70 opacity-60 cursor-not-allowed'
                       : 'border-gray-200 bg-white hover:border-green-300 hover:bg-gray-50/50'
                   }`}
@@ -220,12 +212,8 @@ export function HubDetail() {
                           </span>
                         </div>
 
-                        {/* Availability / Status Pill */}
-                        {isSubscriptionRestricted ? (
-                          <span className="text-[10px] bg-orange-100 text-orange-800 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
-                            Khusus Per Jam
-                          </span>
-                        ) : isOutOfStock ? (
+                        {/* Availability Status Pill */}
+                        {isOutOfStock ? (
                           <span className="text-[10px] bg-rose-100 text-rose-700 font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
                             0 Free (Penuh)
                           </span>
@@ -242,10 +230,17 @@ export function HubDetail() {
                         <span className="text-gray-500 font-mono">
                           📐 {dimensions}
                         </span>
-                        <span className="font-bold text-green-700">
-                          {formatIDR(rate)}/jam
-                        </span>
+                        {isSizeCovered ? (
+                          <span className="font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                            <Sparkles size={11} /> Gratis (Benefit Member)
+                          </span>
+                        ) : (
+                          <span className="font-bold text-green-700">
+                            {formatIDR(rate)}/jam
+                          </span>
+                        )}
                       </div>
+
                       <p className="text-[10px] text-gray-400 mt-0.5">
                         💡 Cocok untuk: {idealFor}
                       </p>
@@ -268,53 +263,51 @@ export function HubDetail() {
           </div>
         </div>
 
-        {/* Duration or Subscription Details */}
-        {selectedMode === 'per-hour' ? (
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider font-bold mb-3">
-              Durasi Sewa
+        {/* Duration Selection Section */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-bold">
+              Durasi Pemakaian Loker
             </p>
-            <div className="flex items-center justify-between bg-gray-50 rounded-2xl p-4 border border-gray-200">
-              <button
-                onClick={() => setSelectedDuration(Math.max(1, selectedDuration - 1))}
-                className="w-11 h-11 rounded-xl bg-white border border-gray-300 flex items-center justify-center hover:bg-gray-100 active:scale-95 transition-all shadow-xs"
-                aria-label="Kurangi durasi"
-              >
-                <Minus size={18} className="text-gray-700" />
-              </button>
-              <div className="text-center">
-                <div className="flex items-baseline justify-center">
-                  <span className="text-3xl font-extrabold text-gray-900">{selectedDuration}</span>
-                  <span className="text-sm font-semibold text-gray-600 ml-1">Jam</span>
-                </div>
+            {isCoveredByMonthlyPass && (
+              <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">
+                Bebas biaya jam
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between bg-gray-50 rounded-2xl p-4 border border-gray-200">
+            <button
+              onClick={() => setSelectedDuration(Math.max(1, selectedDuration - 1))}
+              className="w-11 h-11 rounded-xl bg-white border border-gray-300 flex items-center justify-center hover:bg-gray-100 active:scale-95 transition-all shadow-xs"
+              aria-label="Kurangi durasi"
+            >
+              <Minus size={18} className="text-gray-700" />
+            </button>
+            <div className="text-center">
+              <div className="flex items-baseline justify-center">
+                <span className="text-3xl font-extrabold text-gray-900">{selectedDuration}</span>
+                <span className="text-sm font-semibold text-gray-600 ml-1">Jam</span>
+              </div>
+              {isCoveredByMonthlyPass ? (
+                <p className="text-xs text-emerald-700 font-bold mt-0.5">
+                  Termasuk Kuota Member (Rp 0)
+                </p>
+              ) : (
                 <p className="text-xs text-green-700 font-medium mt-0.5">
-                  Tarif Size {selectedSize}: {formatIDR(hourlyRate)}/jam
+                  Tarif Size {selectedSize}: {formatIDR(baseHourlyRate)}/jam
                 </p>
-              </div>
-              <button
-                onClick={() => setSelectedDuration(Math.min(24, selectedDuration + 1))}
-                className="w-11 h-11 rounded-xl bg-green-700 flex items-center justify-center hover:bg-green-800 active:scale-95 transition-all shadow-xs text-white"
-                aria-label="Tambah durasi"
-              >
-                <Plus size={18} />
-              </button>
+              )}
             </div>
+            <button
+              onClick={() => setSelectedDuration(Math.min(24, selectedDuration + 1))}
+              className="w-11 h-11 rounded-xl bg-green-700 flex items-center justify-center hover:bg-green-800 active:scale-95 transition-all shadow-xs text-white"
+              aria-label="Tambah durasi"
+            >
+              <Plus size={18} />
+            </button>
           </div>
-        ) : (
-          <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-green-700 flex items-center justify-center flex-shrink-0 text-white">
-                <Package size={22} />
-              </div>
-              <div>
-                <p className="font-bold text-green-900 text-sm">Paket Langganan Mahasiswa & Komuter</p>
-                <p className="text-xs text-green-800 mt-1 leading-relaxed">
-                  Akses tanpa batas waktu setiap hari di semua loker hub. Mencakup loker ukuran <strong>S</strong> dan <strong>M</strong>. Bebas denda, bebas antre!
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
 
         {/* Feature Badges: No Fine Policy & Instant Timer */}
         <div className="space-y-2">
@@ -325,14 +318,12 @@ export function HubDetail() {
             </div>
           </div>
 
-          {selectedMode === 'per-hour' && (
-            <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl p-3">
-              <Clock size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
-              <div className="text-xs text-amber-900 leading-relaxed">
-                Hitungan mundur live timer akan otomatis aktif seketika pembayaran berhasil terverifikasi.
-              </div>
+          <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl p-3">
+            <Clock size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-900 leading-relaxed">
+              Hitungan mundur live timer akan otomatis aktif seketika loker berhasil direservasi.
             </div>
-          )}
+          </div>
         </div>
 
         {/* Warning if selected size is out of stock */}
@@ -351,15 +342,22 @@ export function HubDetail() {
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-xs text-gray-500 font-medium">Total Pembayaran</p>
-            <p className="text-2xl font-black text-gray-900">{formatIDR(total)}</p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-2xl font-black text-gray-900">{formatIDR(total)}</p>
+              {isCoveredByMonthlyPass && (
+                <span className="text-xs text-gray-400 line-through">
+                  {formatIDR(selectedDuration * baseHourlyRate)}
+                </span>
+              )}
+            </div>
           </div>
-          {selectedMode === 'per-hour' ? (
-            <p className="text-xs text-gray-600 font-medium text-right">
-              {selectedDuration} jam × {formatIDR(hourlyRate)}
-            </p>
+          {isCoveredByMonthlyPass ? (
+            <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full flex items-center gap-1">
+              <Crown size={12} className="text-amber-500" /> Benefit Member VIP
+            </span>
           ) : (
-            <p className="text-xs text-green-700 font-bold bg-green-100 px-2.5 py-1 rounded-full">
-              Langganan 30 Hari
+            <p className="text-xs text-gray-600 font-medium text-right">
+              {selectedDuration} jam × {formatIDR(baseHourlyRate)}
             </p>
           )}
         </div>
@@ -367,12 +365,12 @@ export function HubDetail() {
         <button
           onClick={() => navigate('/payment')}
           disabled={isCtaDisabled}
-          className="w-full py-4 bg-green-700 text-white rounded-2xl font-bold text-base shadow-lg shadow-green-700/30 hover:bg-green-800 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full py-4 bg-green-700 text-white rounded-2xl font-bold text-base shadow-lg shadow-green-700/30 hover:bg-green-800 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-h-[52px]"
         >
           {isSelectedSizeOutOfStock
             ? `Size ${selectedSize} Penuh - Pilih Ukuran Lain`
-            : isSelectedSizeSubDisabled
-            ? 'Size L Hanya Tersedia Sewa Per Jam'
+            : isCoveredByMonthlyPass
+            ? 'Gunakan Kuota Member (Rp 0)'
             : 'Lanjut ke Pembayaran'}
         </button>
       </div>
