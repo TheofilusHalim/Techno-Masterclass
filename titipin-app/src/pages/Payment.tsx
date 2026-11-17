@@ -46,9 +46,11 @@ export function Payment() {
     selectedSize,
     selectedDuration,
     setActiveLocker,
+    loadActiveBooking,
     addTransaction,
     hasMonthlyPlan,
     activeBookings,
+    userId,
   } = useStore()
 
   const [selectedPayment, setSelectedPayment] = useState('qris')
@@ -85,6 +87,7 @@ export function Payment() {
         durationHours: selectedDuration,
         amount,
         paymentMethod: paymentMethodUsed,
+        userId: userId || undefined,
       })
 
       const assignedLockerNumber = res.lockerNumber || (selectedSize === 'L' ? 'L-01' : selectedSize === 'S' ? 'S-01' : 'M-07')
@@ -97,6 +100,11 @@ export function Payment() {
         duration: selectedDuration,
         bookingId: res.bookingId,
       })
+
+      // Refresh active bookings list from Supabase
+      if (userId) {
+        loadActiveBooking(userId)
+      }
 
       // 3. Log transaction locally
       addTransaction({

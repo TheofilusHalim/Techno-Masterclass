@@ -458,6 +458,7 @@ export async function processBookingTransaction({
   paymentMethod,
   customLockerNumber,
   hasMonthlyPlan,
+  userId,
 }: {
   hubId: string
   size: LockerSize
@@ -467,6 +468,7 @@ export async function processBookingTransaction({
   paymentMethod: string
   customLockerNumber?: string
   hasMonthlyPlan?: boolean
+  userId?: string | null
 }): Promise<{ success: boolean; lockerNumber: string; lockerId?: string; bookingId?: string; error?: string }> {
   const isMember = hasMonthlyPlan || mode === 'subscription'
   const res = await createBooking({
@@ -477,6 +479,7 @@ export async function processBookingTransaction({
     amount: isMember ? 0 : amount,
     lockerNumber: customLockerNumber,
     hasMonthlyPlan: isMember,
+    userId: userId || undefined,
   })
 
   return {
