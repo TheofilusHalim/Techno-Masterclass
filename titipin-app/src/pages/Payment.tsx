@@ -48,6 +48,7 @@ export function Payment() {
     setActiveLocker,
     addTransaction,
     hasMonthlyPlan,
+    activeBookings,
   } = useStore()
 
   const [selectedPayment, setSelectedPayment] = useState('qris')
@@ -57,8 +58,15 @@ export function Payment() {
   const sizeInfo = SIZES_CONFIG[selectedSize] || SIZES_CONFIG['M']
   const hourlyRate = sizeInfo.rate
 
-  // Check if current booking is fully covered by Monthly Pass (S and M lockers)
-  const isCoveredByMonthlyPass = hasMonthlyPlan && (selectedSize === 'S' || selectedSize === 'M')
+  // Subscription Rule: maximum 3 simultaneous lockers under monthly plan
+  const activeSubscriptionCount = activeBookings.filter(
+    (b) => b.payment_type === 'subscription' && (b.status === 'active' || b.status === 'extended')
+  ).length
+  const isSubscriptionQuotaReached = activeSubscriptionCount >= 3
+
+  // Check if current booking is fully covered by Monthly Pass (S and M lockers, max 3)
+  const isCoveredByMonthlyPass =
+    hasMonthlyPlan && (selectedSize === 'S' || selectedSize === 'M') && !isSubscriptionQuotaReached
   const amount = isCoveredByMonthlyPass ? 0 : selectedDuration * hourlyRate
 
   const handlePay = async () => {

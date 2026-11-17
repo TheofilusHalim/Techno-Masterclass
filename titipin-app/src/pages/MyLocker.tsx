@@ -10,6 +10,9 @@ export function MyLocker() {
   const [extendToast, setExtendToast] = useState<string | null>(null)
   const {
     hasActiveLocker,
+    activeBookings,
+    selectedActiveBookingIndex,
+    selectActiveBooking,
     lockerNumber,
     lockerSize,
     lockerLocation,
@@ -87,6 +90,27 @@ export function MyLocker() {
         {activeTab === 'active' ? (
           hasActiveLocker ? (
             <div className="space-y-4">
+              {/* Multiple active lockers switcher */}
+              {activeBookings && activeBookings.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-1 mb-2">
+                  {activeBookings.map((b, idx) => (
+                    <button
+                      key={b.id || idx}
+                      onClick={() => selectActiveBooking(idx)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                        selectedActiveBookingIndex === idx
+                          ? 'bg-green-700 text-white shadow-sm'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Package size={13} />
+                      <span>Loker {b.locker?.locker_number || `#${idx + 1}`}</span>
+                      <span className="text-[10px] opacity-75">({b.locker?.size || 'M'})</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* 10-Minute Reminder Alert with 1-tap Extend */}
               {isAlmostUp && (
                 <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl p-4 shadow-lg border border-amber-400">

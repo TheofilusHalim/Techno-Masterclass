@@ -16,6 +16,7 @@ export function Home() {
     userName,
     isAuthenticated,
     hasActiveLocker,
+    activeBookings,
     lockerNumber,
     remainingSeconds,
     unreadNotifications,
@@ -134,9 +135,15 @@ export function Home() {
                 <Package size={18} className="text-white" />
               </div>
               <div className="text-left">
-                <p className="text-xs text-green-600 font-medium">Active locker</p>
+                <p className="text-xs text-green-600 font-medium">
+                  {activeBookings && activeBookings.length > 1
+                    ? `${activeBookings.length} Loker Aktif`
+                    : 'Active locker'}
+                </p>
                 <p className="text-sm font-semibold text-gray-800">
-                  Locker {lockerNumber} is active • {formatTime(remainingSeconds)}
+                  {activeBookings && activeBookings.length > 1
+                    ? `Unit: ${activeBookings.map((b) => b.locker?.locker_number).filter(Boolean).join(', ')}`
+                    : `Locker ${lockerNumber} is active • ${formatTime(remainingSeconds)}`}
                 </p>
               </div>
             </div>

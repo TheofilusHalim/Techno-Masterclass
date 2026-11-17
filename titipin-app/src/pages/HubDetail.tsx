@@ -56,6 +56,7 @@ export function HubDetail() {
     selectedSize, setSelectedSize,
     selectedDuration, setSelectedDuration,
     hasMonthlyPlan,
+    activeBookings,
   } = useStore()
 
   // Live locker availability slots state
@@ -120,8 +121,15 @@ export function HubDetail() {
   const selectedOption = SIZE_OPTIONS.find((s) => s.key === selectedSize) || SIZE_OPTIONS[1]
   const baseHourlyRate = selectedOption.rate
 
-  // Monthly Pass Benefit Check: covers S and M lockers. Size L is billed per hour.
-  const isCoveredByMonthlyPass = hasMonthlyPlan && (selectedSize === 'S' || selectedSize === 'M')
+  // Subscription Rule: maximum 3 simultaneous lockers under monthly plan
+  const activeSubscriptionCount = activeBookings.filter(
+    (b) => b.payment_type === 'subscription' && (b.status === 'active' || b.status === 'extended')
+  ).length
+  const isSubscriptionQuotaReached = activeSubscriptionCount >= 3
+
+  // Monthly Pass Benefit Check: covers S and M lockers IF active subscription count < 3. Size L is billed per hour.
+  const isCoveredByMonthlyPass =
+    hasMonthlyPlan && (selectedSize === 'S' || selectedSize === 'M') && !isSubscriptionQuotaReached
   const total = isCoveredByMonthlyPass ? 0 : selectedDuration * baseHourlyRate
 
   // Check validity of selection
@@ -156,8 +164,12 @@ export function HubDetail() {
               <Crown size={15} className="text-amber-300" />
               <span className="text-xs font-bold text-white">Member VIP Aktif</span>
             </div>
-            <span className="text-[10px] bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full font-bold">
-              Size S & M Bebas Biaya
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+              isSubscriptionQuotaReached ? 'bg-amber-500 text-amber-950' : 'bg-amber-400 text-amber-950'
+            }`}>
+              {isSubscriptionQuotaReached
+                ? 'Batas Langganan Tercapai (3/3 Aktif)'
+                : `Size S & M Bebas Biaya (${activeSubscriptionCount}/3)`}
             </span>
           </div>
         )}

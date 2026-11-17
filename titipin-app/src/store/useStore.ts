@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import {
   triggerDoorUnlockRemote,
   extendBooking,
-  fetchActiveBooking,
+  fetchActiveBookings,
   subscribeMonthlyPlan,
 } from '../lib/lockerService'
 import type { Booking, AccessMethod } from '../lib/database.types'
@@ -28,6 +28,8 @@ interface AppState {
   hasActiveLocker: boolean
   activeBookingId: string | null
   activeBooking: Booking | null
+  activeBookings: Booking[]
+  selectedActiveBookingIndex: number
   lockerNumber: string
   lockerSize: string
   lockerLocation: string
@@ -71,6 +73,7 @@ interface AppState {
     bookingId?: string
   }) => void
   setActiveBooking: (booking: Booking | null) => void
+  selectActiveBooking: (index: number) => void
   loadActiveBooking: (userId?: string) => Promise<void>
   tickLockerTimer: () => void
   tickQRTimer: () => void
@@ -97,6 +100,8 @@ export const useStore = create<AppState>((set, get) => ({
   hasActiveLocker: false,
   activeBookingId: null,
   activeBooking: null,
+  activeBookings: [],
+  selectedActiveBookingIndex: 0,
   lockerNumber: '',
   lockerSize: 'M',
   lockerLocation: 'Petra Christian University',
@@ -158,12 +163,68 @@ export const useStore = create<AppState>((set, get) => ({
     })
   },
 
+  selectActiveBooking: (index: number) => {
+    const bookings = get().activeBookings
+    if (bookings && bookings[index]) {
+      const cur = bookings[index]
+      const expiresAt = new Date(cur.expires_at).getTime()
+      const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
+      set({
+        selectedActiveBookingIndex: index,
+        activeBooking: cur,
+        activeBookingId: cur.id,
+        lockerNumber: cur.locker?.locker_number || '',
+        lockerSize: (cur.locker?.size as any) || 'M',
+        lockerLocation: cur.hub?.name || 'Petra Christian University',
+        remainingSeconds: remaining,
+      })
+    }
+  },
+
   loadActiveBooking: async (userId?: string) => {
     try {
       const uid = userId || get().userId
-      const { data: booking } = await fetchActiveBooking(uid || undefined)
-      if (booking) {
-        get().setActiveBooking(booking)
+      if (!uid) {
+        set({
+          activeBookings: [],
+          hasActiveLocker: false,
+          activeBooking: null,
+          activeBookingId: null,
+          lockerNumber: '',
+          remainingSeconds: 0,
+        })
+        return
+      }
+
+      const { data: bookings } = await fetchActiveBookings(uid)
+      if (bookings && bookings.length > 0) {
+        const selectedIdx = Math.min(get().selectedActiveBookingIndex || 0, bookings.length - 1)
+        const cur = bookings[selectedIdx]
+        const expiresAt = new Date(cur.expires_at).getTime()
+        const now = Date.now()
+        const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000))
+
+        set({
+          activeBookings: bookings,
+          hasActiveLocker: true,
+          activeBooking: cur,
+          activeBookingId: cur.id,
+          lockerNumber: cur.locker?.locker_number || '',
+          lockerSize: (cur.locker?.size as any) || 'M',
+          lockerLocation: cur.hub?.name || 'Petra Christian University',
+          remainingSeconds: remaining,
+          selectedActiveBookingIndex: selectedIdx,
+        })
+      } else {
+        set({
+          activeBookings: [],
+          hasActiveLocker: false,
+          activeBooking: null,
+          activeBookingId: null,
+          lockerNumber: '',
+          remainingSeconds: 0,
+          selectedActiveBookingIndex: 0,
+        })
       }
     } catch (err) {
       console.warn('loadActiveBooking error:', err)
@@ -419,7 +480,7 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       if (data?.user) {
-        if (data.session) {
+        if (data.user.email_confirmed_at) {
           set({
             userName: fullName.trim(),
             userEmail: data.user.email || email,

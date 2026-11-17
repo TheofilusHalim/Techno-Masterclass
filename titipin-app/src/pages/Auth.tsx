@@ -77,18 +77,12 @@ export function Auth() {
       } else {
         const res = await registerUser(fullName, email, password)
         if (res.success) {
-          if (res.needsEmailConfirmation) {
-            setSuccessMessage(
-              `Registrasi berhasil! Tautan konfirmasi telah dikirim ke ${email}. Silakan buka Gmail Anda, klik link verifikasinya, lalu Sign In di bawah.`
-            )
-            setMode('signin')
-          } else {
-            setSuccessMessage('Account registered successfully! Redirecting...')
-            resetFields()
-            setTimeout(() => navigate(from, { replace: true }), 700)
-          }
+          setSuccessMessage(
+            `Registrasi berhasil! Tautan konfirmasi telah dikirim ke ${email}. Silakan buka email Anda, klik konfirmasi, lalu Sign In di tab Masuk.`
+          )
+          setMode('signin')
         } else {
-          setErrorMessage(res.error || 'Failed to register account.')
+          setErrorMessage(res.error || 'Gagal mendaftarkan akun.')
         }
       }
     } catch (err: unknown) {

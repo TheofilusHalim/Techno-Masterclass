@@ -664,11 +664,12 @@ export async function extendBooking(
 }
 
 /**
- * Loads user's active booking with locker and hub relations.
+ * Loads all active bookings for a specific user with locker and hub relations.
+ * Strictly queries by user_id to ensure zero cross-user session leakage.
  */
-export async function fetchActiveBooking(
+export async function fetchActiveBookings(
   userId?: string
-): Promise<{ data: Booking | null; error: string | null }> {
+): Promise<{ data: Booking[]; error: string | null }> {
   try {
     let effectiveUserId = userId
 
@@ -683,27 +684,11 @@ export async function fetchActiveBooking(
       }
     }
 
-    // 1. Query by user_id if valid UUID
-    if (effectiveUserId && isValidUUID(effectiveUserId)) {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select(`
-          *,
-          locker:lockers(*),
-          hub:hubs(*)
-        `)
-        .in('status', ['active', 'extended'])
-        .eq('user_id', effectiveUserId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      if (!error && data && data.length > 0) {
-        return { data: data[0] as Booking, error: null }
-      }
+    if (!effectiveUserId || !isValidUUID(effectiveUserId)) {
+      return { data: [], error: null }
     }
 
-    // 2. Demo fallback: query latest active booking
-    const { data: latestActive, error: latestErr } = await supabase
+    const { data, error } = await supabase
       .from('bookings')
       .select(`
         *,
@@ -711,18 +696,29 @@ export async function fetchActiveBooking(
         hub:hubs(*)
       `)
       .in('status', ['active', 'extended'])
+      .eq('user_id', effectiveUserId)
       .order('created_at', { ascending: false })
-      .limit(1)
 
-    if (!latestErr && latestActive && latestActive.length > 0) {
-      return { data: latestActive[0] as Booking, error: null }
+    if (error) {
+      console.error('Error fetching active bookings:', error)
+      return { data: [], error: error.message }
     }
 
-    return { data: null, error: null }
+    return { data: (data || []) as Booking[], error: null }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    return { data: null, error: msg }
+    return { data: [], error: msg }
   }
+}
+
+/**
+ * Loads the user's primary/latest active booking.
+ */
+export async function fetchActiveBooking(
+  userId?: string
+): Promise<{ data: Booking | null; error: string | null }> {
+  const { data, error } = await fetchActiveBookings(userId)
+  return { data: data.length > 0 ? data[0] : null, error }
 }
 
 /**
