@@ -1,8 +1,89 @@
-import { Outlet } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { SimulatorPanel } from './SimulatorPanel'
+import { useStore } from '../store/useStore'
+import { supabase } from '../lib/supabase'
 
 export function AppShell() {
+  const { isAuthenticated } = useStore()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+
+  useEffect(() => {
+    // Check current session from Supabase on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        const displayName =
+          session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'
+        useStore.setState({
+          isAuthenticated: true,
+          userId: session.user.id,
+          userEmail: session.user.email || '',
+          userName: displayName,
+        })
+        useStore.getState().refreshUserProfile(session.user.id)
+        useStore.getState().loadActiveBooking(session.user.id)
+      } else {
+        useStore.setState({
+          isAuthenticated: false,
+          userId: null,
+          userEmail: '',
+          userName: '',
+          hasActiveLocker: false,
+          activeBookingId: null,
+          activeBooking: null,
+        })
+        // If not authenticated and not already on /auth or /login, redirect to /auth
+        if (location.pathname !== '/auth' && location.pathname !== '/login' && location.pathname !== '/faq') {
+          navigate('/auth', { replace: true })
+        }
+      }
+      setIsCheckingAuth(false)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const displayName =
+          session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'
+        useStore.setState({
+          isAuthenticated: true,
+          userId: session.user.id,
+          userEmail: session.user.email || '',
+          userName: displayName,
+        })
+        useStore.getState().refreshUserProfile(session.user.id)
+        useStore.getState().loadActiveBooking(session.user.id)
+      } else {
+        useStore.setState({
+          isAuthenticated: false,
+          userId: null,
+          userEmail: '',
+          userName: '',
+          hasActiveLocker: false,
+          activeBookingId: null,
+          activeBooking: null,
+        })
+        if (location.pathname !== '/auth' && location.pathname !== '/login' && location.pathname !== '/faq') {
+          navigate('/auth', { replace: true })
+        }
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center">
       {/* Mobile viewport */}
@@ -11,7 +92,7 @@ export function AppShell() {
         <main className="flex-1 overflow-y-auto pb-20">
           <Outlet />
         </main>
-        <BottomNav />
+        {isAuthenticated && <BottomNav />}
       </div>
 
       {/* Desktop Hardware Simulator Panel — only visible md+ */}

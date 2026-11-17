@@ -89,19 +89,18 @@ interface AppState {
   loginUser: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   registerUser: (fullName: string, email: string, password: string) => Promise<{ success: boolean; needsEmailConfirmation?: boolean; error?: string }>
   logoutUser: () => Promise<void>
-  loginDemo: (name?: string, email?: string) => void
 }
 
 let unlockTimer: ReturnType<typeof setTimeout> | null = null
 
 export const useStore = create<AppState>((set, get) => ({
-  hasActiveLocker: true,
-  activeBookingId: 'b1000000-0000-0000-0000-000000000007',
+  hasActiveLocker: false,
+  activeBookingId: null,
   activeBooking: null,
-  lockerNumber: 'M-07',
+  lockerNumber: '',
   lockerSize: 'M',
   lockerLocation: 'Petra Christian University',
-  remainingSeconds: 6712, // ~01:51:52
+  remainingSeconds: 0,
   qrRefreshSeconds: 60,
   lockerStatus: 'idle',
   isDoorOpen: false,
@@ -112,10 +111,10 @@ export const useStore = create<AppState>((set, get) => ({
   connectionStatus: 'connected',
   connectionError: null,
 
-  userName: 'Kevin',
-  userEmail: 'kevin@example.com',
-  userId: 'u1000000-0000-0000-0000-000000000001',
-  isAuthenticated: true,
+  userName: '',
+  userEmail: '',
+  userId: null,
+  isAuthenticated: false,
   hasMonthlyPlan: false,
   planExpiresAt: null,
 
@@ -125,42 +124,9 @@ export const useStore = create<AppState>((set, get) => ({
   selectedMode: 'per-hour',
   selectedDuration: 2,
 
-  transactions: [
-    {
-      id: 'tx-001',
-      date: '2026-11-15',
-      location: 'Petra Christian University',
-      lockerSize: 'M',
-      lockerNumber: 'M-07',
-      duration: 2,
-      amount: 6000,
-      type: 'per-hour',
-      status: 'success',
-    },
-    {
-      id: 'tx-002',
-      date: '2026-11-14',
-      location: 'Gubeng Station',
-      lockerSize: 'S',
-      lockerNumber: 'S-03',
-      duration: 1,
-      amount: 3000,
-      type: 'per-hour',
-      status: 'success',
-    },
-    {
-      id: 'tx-003',
-      date: '2026-11-01',
-      location: 'All Hubs',
-      lockerSize: 'S/M',
-      lockerNumber: 'Monthly',
-      amount: 125000,
-      type: 'subscription',
-      status: 'plan',
-    },
-  ],
+  transactions: [],
 
-  unreadNotifications: 2,
+  unreadNotifications: 0,
 
   setActiveLocker: ({ lockerNumber, lockerSize, lockerLocation, duration, bookingId }) =>
     set({
@@ -483,23 +449,16 @@ export const useStore = create<AppState>((set, get) => ({
       console.warn('Signout warning:', err)
     }
     set({
-      userName: 'Guest',
+      userName: '',
       userEmail: '',
       userId: null,
       isAuthenticated: false,
       hasActiveLocker: false,
       activeBookingId: null,
       activeBooking: null,
+      hasMonthlyPlan: false,
+      planExpiresAt: null,
+      transactions: [],
     })
-  },
-
-  loginDemo: (name = 'Kevin', email = 'kevin@example.com') => {
-    set({
-      userName: name,
-      userEmail: email,
-      userId: 'u1000000-0000-0000-0000-000000000001',
-      isAuthenticated: true,
-    })
-    get().loadActiveBooking('u1000000-0000-0000-0000-000000000001')
   },
 }))

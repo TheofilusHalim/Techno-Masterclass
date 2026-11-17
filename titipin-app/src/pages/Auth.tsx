@@ -6,7 +6,7 @@ import { useStore } from '../store/useStore'
 export function Auth() {
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as { from?: string })?.from || '/account'
+  const from = (location.state as { from?: string })?.from || '/'
 
   const { loginUser, registerUser } = useStore()
 

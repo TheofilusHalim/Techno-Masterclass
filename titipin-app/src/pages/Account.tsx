@@ -41,7 +41,7 @@ export function Account() {
                   <Shield size={10} /> Verified
                 </span>
               </div>
-              <p className="text-green-200 text-sm mt-0.5">{userEmail || 'kevin@example.com'}</p>
+              <p className="text-green-200 text-sm mt-0.5">{userEmail}</p>
             </div>
           </div>
         ) : (
