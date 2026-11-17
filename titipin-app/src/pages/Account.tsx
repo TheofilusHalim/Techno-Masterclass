@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown, LogIn, Shield, User } from 'lucide-react'
+import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown, LogIn, Shield, User, CheckCircle2 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 
 function formatIDR(amount: number) {
@@ -64,46 +64,62 @@ export function Account() {
       </div>
 
       <div className="flex-1 px-4 py-5 space-y-5">
-        {/* Monthly Plan card */}
-        <div className={`rounded-2xl p-4 border ${
+        {/* Monthly Subscription Membership Pass Card */}
+        <div className={`rounded-2xl p-4 border transition-all ${
           hasMonthlyPlan
-            ? 'bg-gradient-to-br from-green-700 to-green-800 border-green-600 text-white'
+            ? 'bg-gradient-to-br from-green-800 via-green-700 to-emerald-800 border-green-600 text-white shadow-md'
             : 'bg-gray-50 border-gray-200'
         }`}>
           <div className="flex items-start justify-between mb-3">
             <div>
               <div className="flex items-center gap-2 mb-0.5">
-                <Crown size={16} className={hasMonthlyPlan ? 'text-yellow-300' : 'text-gray-400'} />
-                <p className={`text-sm font-semibold ${hasMonthlyPlan ? 'text-white' : 'text-gray-700'}`}>
-                  Monthly Plan
+                <Crown size={18} className={hasMonthlyPlan ? 'text-amber-300' : 'text-gray-400'} />
+                <p className={`text-sm font-bold ${hasMonthlyPlan ? 'text-white' : 'text-gray-800'}`}>
+                  {hasMonthlyPlan ? 'Paket Aktif (Member VIP)' : 'Langganan Member Bulanan'}
                 </p>
               </div>
-              <p className={`text-xs ${hasMonthlyPlan ? 'text-green-200' : 'text-gray-400'}`}>
+              <p className={`text-xs ${hasMonthlyPlan ? 'text-green-100' : 'text-gray-500'}`}>
                 {hasMonthlyPlan
-                  ? 'Unlimited access — all hubs, S & M lockers'
-                  : 'Unlimited hours at all hubs — Rp125.000/month'}
+                  ? 'Akses loker Size S & M tanpa batas kuota di seluruh hub.'
+                  : 'Sewa loker harian tanpa batas biaya di semua hub.'}
               </p>
             </div>
-            <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+            <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap ${
               hasMonthlyPlan
-                ? 'bg-green-500 text-white'
-                : 'bg-gray-200 text-gray-500'
+                ? 'bg-amber-400 text-amber-950 shadow-xs'
+                : 'bg-gray-200 text-gray-600'
             }`}>
-              {hasMonthlyPlan ? 'Active' : 'Not active'}
+              {hasMonthlyPlan ? 'Member VIP Aktif' : 'Belum Berlangganan'}
             </span>
           </div>
-          {!hasMonthlyPlan && (
-            <button
-              onClick={subscribeMonthly}
-              className="w-full py-2.5 bg-green-700 text-white rounded-xl font-semibold text-sm hover:bg-green-800 transition-colors shadow-sm"
-            >
-              Subscribe — {formatIDR(125000)}/month
-            </button>
-          )}
-          {hasMonthlyPlan && (
-            <p className="text-xs text-green-300">
-              Renews on 15 Dec 2026
-            </p>
+
+          {!hasMonthlyPlan ? (
+            <div>
+              <p className="text-xs text-gray-500 mb-3">
+                Cukup {formatIDR(125000)}/bulan untuk akses loker S dan M setiap hari bebas biaya jam sewa.
+              </p>
+              <button
+                onClick={subscribeMonthly}
+                className="w-full py-3 bg-green-700 text-white rounded-xl font-bold text-xs hover:bg-green-800 active:scale-95 transition-all shadow-sm"
+              >
+                Berlangganan Sekarang — {formatIDR(125000)}/bulan
+              </button>
+            </div>
+          ) : (
+            <div className="pt-3 border-t border-green-600/60 space-y-2">
+              <div className="flex items-center justify-between text-xs text-green-100">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <CheckCircle2 size={14} className="text-amber-300" />
+                  Status Keanggotaan: <strong>Aktif</strong>
+                </span>
+                <span className="text-[11px] bg-black/20 text-green-200 px-2 py-0.5 rounded-md font-mono">
+                  1 Akun / 30 Hari
+                </span>
+              </div>
+              <p className="text-[11px] text-green-200">
+                Berlaku hingga: <strong>17 Desember 2026</strong>. Anda tidak dapat berlangganan ganda selama paket aktif.
+              </p>
+            </div>
           )}
         </div>
 
