@@ -3,6 +3,7 @@ import {
   triggerDoorUnlockRemote,
   extendBooking,
   fetchActiveBooking,
+  subscribeMonthlyPlan,
 } from '../lib/lockerService'
 import type { Booking, AccessMethod } from '../lib/database.types'
 import { supabase } from '../lib/supabase'
@@ -46,6 +47,7 @@ interface AppState {
   userId: string | null
   isAuthenticated: boolean
   hasMonthlyPlan: boolean
+  planExpiresAt: string | null
 
   // Booking flow state
   selectedHub: string
@@ -80,7 +82,8 @@ interface AppState {
   setSelectedMode: (mode: 'per-hour' | 'subscription') => void
   setSelectedDuration: (dur: number) => void
   addTransaction: (tx: Transaction) => void
-  subscribeMonthly: () => void
+  subscribeMonthly: () => Promise<{ success: boolean; message: string; error?: string }>
+  refreshUserProfile: (userId?: string) => Promise<void>
   markNotificationsRead: () => void
   setConnectionStatus: (status: ConnectionStatus, error?: string | null) => void
   loginUser: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
@@ -114,6 +117,7 @@ export const useStore = create<AppState>((set, get) => ({
   userId: 'u1000000-0000-0000-0000-000000000001',
   isAuthenticated: true,
   hasMonthlyPlan: false,
+  planExpiresAt: null,
 
   selectedHub: 'Petra Christian University',
   selectedHubId: '11111111-1111-1111-1111-111111111111',
@@ -319,19 +323,63 @@ export const useStore = create<AppState>((set, get) => ({
   addTransaction: (tx) =>
     set((s) => ({ transactions: [tx, ...s.transactions] })),
 
-  subscribeMonthly: () => {
-    const { addTransaction } = get()
-    set({ hasMonthlyPlan: true })
+  subscribeMonthly: async () => {
+    const { hasMonthlyPlan, userId, addTransaction } = get()
+    if (hasMonthlyPlan) {
+      return {
+        success: false,
+        message: 'Akun Anda sudah memiliki langganan aktif.',
+        error: 'ALREADY_ACTIVE',
+      }
+    }
+
+    const expiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString()
+    set({
+      hasMonthlyPlan: true,
+      planExpiresAt: expiresAt,
+    })
+
     addTransaction({
       id: `tx-sub-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
-      location: 'All Hubs',
+      location: 'All Hubs (Member VIP)',
       lockerSize: 'S/M',
-      lockerNumber: 'Monthly',
+      lockerNumber: 'Member Pass',
       amount: 125000,
       type: 'subscription',
       status: 'plan',
     })
+
+    try {
+      const res = await subscribeMonthlyPlan(userId || undefined)
+      if (res.planExpiresAt) {
+        set({ planExpiresAt: res.planExpiresAt, hasMonthlyPlan: res.success })
+      }
+      return res
+    } catch {
+      return { success: true, message: 'Langganan berhasil diaktifkan (Demo mode)' }
+    }
+  },
+
+  refreshUserProfile: async (userId?: string) => {
+    try {
+      const uid = userId || get().userId
+      if (!uid || uid.startsWith('u1000')) return
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('has_monthly_plan, plan_expires_at')
+        .eq('id', uid)
+        .maybeSingle()
+      if (profile) {
+        const isExpired = profile.plan_expires_at && new Date(profile.plan_expires_at).getTime() < Date.now()
+        set({
+          hasMonthlyPlan: Boolean(profile.has_monthly_plan) && !isExpired,
+          planExpiresAt: profile.plan_expires_at,
+        })
+      }
+    } catch (err) {
+      console.warn('refreshUserProfile error:', err)
+    }
   },
 
   markNotificationsRead: () => {
@@ -370,6 +418,7 @@ export const useStore = create<AppState>((set, get) => ({
           isAuthenticated: true,
         })
         get().loadActiveBooking(data.user.id)
+        get().refreshUserProfile(data.user.id)
         return { success: true }
       }
 
