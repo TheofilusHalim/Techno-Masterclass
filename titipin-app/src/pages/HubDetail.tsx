@@ -196,7 +196,7 @@ export function HubDetail() {
               const freeCount = availableSlots[key] ?? 0
               const isOutOfStock = freeCount === 0
               const isSelected = selectedSize === key && !isOutOfStock
-              const isSizeCovered = hasMonthlyPlan && (key === 'S' || key === 'M')
+              const isSizeCovered = hasMonthlyPlan && (key === 'S' || key === 'M') && !isSubscriptionQuotaReached
 
               return (
                 <button
