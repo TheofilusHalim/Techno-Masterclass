@@ -121,3 +121,21 @@ export interface DBNotification {
   is_read: boolean
   created_at: string
 }
+
+export interface CreateBookingParams {
+  hubId: string
+  lockerSize: LockerSize
+  durationHours: number
+  paymentMethod: PaymentMethod | string
+  amount: number
+  userId?: string
+  lockerNumber?: string
+}
+
+export interface ExtendBookingResult {
+  success: boolean
+  data: Booking | null
+  newExpiresAt?: string
+  error: string | null
+}
+

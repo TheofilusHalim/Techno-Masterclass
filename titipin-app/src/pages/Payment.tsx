@@ -57,6 +57,7 @@ export function Payment() {
         lockerSize: selectedSize,
         lockerLocation: selectedHub,
         duration: selectedMode === 'per-hour' ? selectedDuration : 720,
+        bookingId: res.bookingId,
       })
 
       // 3. Log transaction locally

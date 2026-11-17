@@ -7,8 +7,24 @@ import { formatTime } from '../utils/time'
 export function MyLocker() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<'active' | 'finished'>('active')
-  const { hasActiveLocker, lockerNumber, lockerSize, lockerLocation, remainingSeconds, tickLockerTimer, extendLocker, triggerUnlock, isDoorOpen } = useStore()
+  const {
+    hasActiveLocker,
+    lockerNumber,
+    lockerSize,
+    lockerLocation,
+    remainingSeconds,
+    tickLockerTimer,
+    extendLocker,
+    triggerUnlock,
+    isDoorOpen,
+    loadActiveBooking,
+    userId,
+  } = useStore()
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    loadActiveBooking(userId || undefined)
+  }, [loadActiveBooking, userId])
 
   useEffect(() => {
     intervalRef.current = setInterval(() => tickLockerTimer(), 1000)

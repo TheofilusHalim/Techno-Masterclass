@@ -1,5 +1,10 @@
 import { create } from 'zustand'
-import { triggerDoorUnlockRemote } from '../lib/lockerService'
+import {
+  triggerDoorUnlockRemote,
+  extendBooking,
+  fetchActiveBooking,
+} from '../lib/lockerService'
+import type { Booking, AccessMethod } from '../lib/database.types'
 import { supabase } from '../lib/supabase'
 
 export interface Transaction {
@@ -18,8 +23,10 @@ export type LockerStatus = 'locked' | 'unlocked' | 'idle'
 export type ConnectionStatus = 'connected' | 'connecting' | 'error'
 
 interface AppState {
-  // Active locker session
+  // Active locker session & Supabase booking link
   hasActiveLocker: boolean
+  activeBookingId: string | null
+  activeBooking: Booking | null
   lockerNumber: string
   lockerSize: string
   lockerLocation: string
@@ -54,11 +61,19 @@ interface AppState {
   unreadNotifications: number
 
   // Actions
-  setActiveLocker: (data: { lockerNumber: string; lockerSize: string; lockerLocation: string; duration: number }) => void
+  setActiveLocker: (data: {
+    lockerNumber: string
+    lockerSize: string
+    lockerLocation: string
+    duration: number
+    bookingId?: string
+  }) => void
+  setActiveBooking: (booking: Booking | null) => void
+  loadActiveBooking: (userId?: string) => Promise<void>
   tickLockerTimer: () => void
   tickQRTimer: () => void
-  extendLocker: () => void
-  triggerUnlock: (source: string, accessMethod?: 'QR_SCAN' | 'REMOTE_APP' | 'RFID_TAP') => Promise<void>
+  extendLocker: () => Promise<void>
+  triggerUnlock: (source: string, accessMethod?: AccessMethod) => Promise<void>
   setDoorOpenFromRealtime: (isOpen: boolean, source?: string) => void
   setSelectedHub: (hub: string, hubId?: string) => void
   setSelectedSize: (size: 'S' | 'M' | 'L') => void
@@ -78,6 +93,8 @@ let unlockTimer: ReturnType<typeof setTimeout> | null = null
 
 export const useStore = create<AppState>((set, get) => ({
   hasActiveLocker: true,
+  activeBookingId: 'b1000000-0000-0000-0000-000000000007',
+  activeBooking: null,
   lockerNumber: 'M-07',
   lockerSize: 'M',
   lockerLocation: 'Petra Christian University',
@@ -99,7 +116,7 @@ export const useStore = create<AppState>((set, get) => ({
   hasMonthlyPlan: false,
 
   selectedHub: 'Petra Christian University',
-  selectedHubId: 'a1000000-0000-0000-0000-000000000001',
+  selectedHubId: '11111111-1111-1111-1111-111111111111',
   selectedSize: 'M',
   selectedMode: 'per-hour',
   selectedDuration: 2,
@@ -141,15 +158,47 @@ export const useStore = create<AppState>((set, get) => ({
 
   unreadNotifications: 2,
 
-  setActiveLocker: ({ lockerNumber, lockerSize, lockerLocation, duration }) =>
+  setActiveLocker: ({ lockerNumber, lockerSize, lockerLocation, duration, bookingId }) =>
     set({
       hasActiveLocker: true,
+      activeBookingId: bookingId || get().activeBookingId,
       lockerNumber,
       lockerSize,
       lockerLocation,
       remainingSeconds: duration * 3600,
       qrRefreshSeconds: 60,
     }),
+
+  setActiveBooking: (booking) => {
+    if (!booking) {
+      set({ activeBooking: null, activeBookingId: null, hasActiveLocker: false })
+      return
+    }
+    const expiresAt = new Date(booking.expires_at).getTime()
+    const now = Date.now()
+    const remainingSeconds = Math.max(0, Math.floor((expiresAt - now) / 1000))
+    set({
+      hasActiveLocker: true,
+      activeBooking: booking,
+      activeBookingId: booking.id,
+      lockerNumber: booking.locker?.locker_number || get().lockerNumber,
+      lockerSize: (booking.locker?.size as any) || get().lockerSize,
+      lockerLocation: booking.hub?.name || get().lockerLocation,
+      remainingSeconds: remainingSeconds > 0 ? remainingSeconds : get().remainingSeconds,
+    })
+  },
+
+  loadActiveBooking: async (userId?: string) => {
+    try {
+      const uid = userId || get().userId
+      const { data: booking } = await fetchActiveBooking(uid || undefined)
+      if (booking) {
+        get().setActiveBooking(booking)
+      }
+    } catch (err) {
+      console.warn('loadActiveBooking error:', err)
+    }
+  },
 
   tickLockerTimer: () =>
     set((s) => ({
@@ -161,9 +210,18 @@ export const useStore = create<AppState>((set, get) => ({
       qrRefreshSeconds: s.qrRefreshSeconds <= 1 ? 60 : s.qrRefreshSeconds - 1,
     })),
 
-  extendLocker: () => {
-    const { addTransaction, lockerNumber, lockerSize, lockerLocation } = get()
-    set((s) => ({ remainingSeconds: s.remainingSeconds + 3600 }))
+  extendLocker: async () => {
+    const { addTransaction, lockerNumber, lockerSize, lockerLocation, activeBookingId } = get()
+
+    // 1. Optimistically update local timer and transaction for instant UX feedback
+    set((s) => ({
+      remainingSeconds: s.remainingSeconds + 3600,
+      lockerStatusLog: [
+        `[${new Date().toLocaleTimeString()}] Extend +1 hr requested (Supabase: extendBooking)`,
+        ...s.lockerStatusLog,
+      ].slice(0, 15),
+    }))
+
     addTransaction({
       id: `tx-${Date.now()}`,
       date: new Date().toISOString().split('T')[0],
@@ -175,10 +233,23 @@ export const useStore = create<AppState>((set, get) => ({
       type: 'per-hour',
       status: 'success',
     })
+
+    // 2. Call Supabase extendBooking API
+    try {
+      const res = await extendBooking(activeBookingId || lockerNumber, 1)
+      if (res.success && res.newExpiresAt) {
+        const remaining = Math.max(0, Math.floor((new Date(res.newExpiresAt).getTime() - Date.now()) / 1000))
+        if (remaining > 0) {
+          set({ remainingSeconds: remaining })
+        }
+      }
+    } catch (err) {
+      console.warn('extendBooking API error:', err)
+    }
   },
 
-  triggerUnlock: async (source: string, accessMethod: 'QR_SCAN' | 'REMOTE_APP' | 'RFID_TAP' = 'REMOTE_APP') => {
-    const { lockerNumber } = get()
+  triggerUnlock: async (source: string, accessMethod: AccessMethod = 'REMOTE_APP') => {
+    const { lockerNumber, activeBookingId } = get()
     const timeStr = new Date().toLocaleTimeString()
     const log = [
       `[${timeStr}] Unlock triggered by ${source} (${accessMethod}) -> Supabase: door_command = UNLOCK (5s)`,
@@ -191,8 +262,8 @@ export const useStore = create<AppState>((set, get) => ({
     // Update local store state immediately
     set({ lockerStatus: 'unlocked', isDoorOpen: true, lockerStatusLog: log })
 
-    // Call Supabase API to update door_command = 'UNLOCK' & is_door_open = true
-    triggerDoorUnlockRemote(lockerNumber, accessMethod).catch((e) => {
+    // Call Supabase API to update door_command = 'UNLOCK' & record access_method in locker_logs
+    triggerDoorUnlockRemote(lockerNumber, accessMethod, activeBookingId).catch((e) => {
       console.warn('triggerDoorUnlockRemote catch:', e)
     })
 
@@ -274,7 +345,6 @@ export const useStore = create<AppState>((set, get) => ({
 
   loginUser: async (email, password) => {
     try {
-      // 8-second timeout guard
       const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
         setTimeout(() => resolve({ data: null, error: { message: 'Connection timed out. Please check your network.' } }), 8000)
       )
@@ -299,6 +369,7 @@ export const useStore = create<AppState>((set, get) => ({
           userId: data.user.id,
           isAuthenticated: true,
         })
+        get().loadActiveBooking(data.user.id)
         return { success: true }
       }
 
@@ -333,7 +404,6 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       if (data?.user) {
-        // If Supabase provided active session immediately (auto-confirmed)
         if (data.session) {
           set({
             userName: fullName.trim(),
@@ -344,7 +414,6 @@ export const useStore = create<AppState>((set, get) => ({
           return { success: true, needsEmailConfirmation: false }
         }
 
-        // Email confirmation is required by Supabase: user must check inbox
         return {
           success: true,
           needsEmailConfirmation: true,
@@ -369,6 +438,9 @@ export const useStore = create<AppState>((set, get) => ({
       userEmail: '',
       userId: null,
       isAuthenticated: false,
+      hasActiveLocker: false,
+      activeBookingId: null,
+      activeBooking: null,
     })
   },
 
@@ -379,5 +451,6 @@ export const useStore = create<AppState>((set, get) => ({
       userId: 'u1000000-0000-0000-0000-000000000001',
       isAuthenticated: true,
     })
+    get().loadActiveBooking('u1000000-0000-0000-0000-000000000001')
   },
 }))
