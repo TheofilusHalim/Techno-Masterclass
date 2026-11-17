@@ -166,6 +166,40 @@ create table if not exists public.bookings (
   updated_at      timestamptz not null default now()
 );
 
+-- Foreign Key: lockers.current_booking_id -> bookings.id
+alter table public.lockers
+  drop constraint if exists fk_lockers_current_booking;
+alter table public.lockers
+  add constraint fk_lockers_current_booking
+  foreign key (current_booking_id) references public.bookings(id) on delete set null;
+
+-- Trigger: Auto-release / auto-occupy locker on booking lifecycle
+create or replace function public.sync_booking_locker_status()
+returns trigger language plpgsql as $$
+begin
+  if new.status in ('finished', 'cancelled') then
+    update public.lockers
+    set status = 'available',
+        is_occupied = false,
+        current_booking_id = null
+    where id = new.locker_id
+      and current_booking_id = new.id;
+  elsif new.status in ('active', 'extended') then
+    update public.lockers
+    set status = 'occupied',
+        is_occupied = true,
+        current_booking_id = new.id
+    where id = new.locker_id;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_sync_booking_locker_status on public.bookings;
+create trigger trg_sync_booking_locker_status
+  after insert or update on public.bookings
+  for each row execute function public.sync_booking_locker_status();
+
 -- 7. TRANSACTIONS TABLE
 create table if not exists public.transactions (
   id              uuid primary key default uuid_generate_v4(),

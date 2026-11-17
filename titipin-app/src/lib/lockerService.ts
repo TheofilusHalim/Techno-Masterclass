@@ -381,26 +381,39 @@ export async function createBooking(
 
     if (bookingErr) {
       console.warn('Supabase booking insert warning:', bookingErr.message)
-    } else if (bookingData) {
+      return {
+        success: false,
+        data: null,
+        locker,
+        lockerNumber,
+        lockerId,
+        bookingId: undefined,
+        error: bookingErr.message,
+      }
+    }
+
+    if (bookingData) {
       bookingRecord = bookingData as Booking
       bookingId = bookingData.id
     }
 
-    // 5. Update locker status in `lockers` table to occupied
-    const lockerUpdatePayload: Record<string, any> = {
-      status: 'occupied',
-      is_occupied: true,
-      current_booking_id: bookingId || null,
-      updated_at: new Date().toISOString(),
-    }
+    // 5. Explicitly sync locker status in `lockers` table with current_booking_id
+    if (bookingId) {
+      const lockerUpdatePayload: Record<string, any> = {
+        status: 'occupied',
+        is_occupied: true,
+        current_booking_id: bookingId,
+        updated_at: new Date().toISOString(),
+      }
 
-    const { error: updateErr } = await supabase
-      .from('lockers')
-      .update(lockerUpdatePayload)
-      .eq('id', lockerId)
+      const { error: updateErr } = await supabase
+        .from('lockers')
+        .update(lockerUpdatePayload)
+        .eq('id', lockerId)
 
-    if (updateErr) {
-      console.warn('Supabase locker update warning:', updateErr.message)
+      if (updateErr) {
+        console.warn('Supabase locker update warning:', updateErr.message)
+      }
     }
 
     // 6. Record transaction in `transactions` table
@@ -431,7 +444,7 @@ export async function createBooking(
       lockerNumber,
       lockerId,
       bookingId,
-      error: bookingErr ? bookingErr.message : null,
+      error: null,
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
