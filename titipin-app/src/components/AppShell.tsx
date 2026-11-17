@@ -5,7 +5,6 @@ import { useStore } from '../store/useStore'
 import { supabase } from '../lib/supabase'
 
 export function AppShell() {
-  const { isAuthenticated } = useStore()
   const location = useLocation()
   const navigate = useNavigate()
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
@@ -91,7 +90,7 @@ export function AppShell() {
         <main className="flex-1 overflow-y-auto pb-20">
           <Outlet />
         </main>
-        {isAuthenticated && <BottomNav />}
+        <BottomNav />
       </div>
     </div>
   )
