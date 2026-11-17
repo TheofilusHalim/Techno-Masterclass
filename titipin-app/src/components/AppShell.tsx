@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
-import { SimulatorPanel } from './SimulatorPanel'
 import { useStore } from '../store/useStore'
 import { supabase } from '../lib/supabase'
 
@@ -93,11 +92,6 @@ export function AppShell() {
           <Outlet />
         </main>
         {isAuthenticated && <BottomNav />}
-      </div>
-
-      {/* Desktop Hardware Simulator Panel — only visible md+ */}
-      <div className="hidden md:flex md:flex-col md:w-80 md:ml-4 md:self-start md:sticky md:top-4">
-        <SimulatorPanel />
       </div>
     </div>
   )
