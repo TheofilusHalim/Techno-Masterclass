@@ -1,68 +1,73 @@
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, QrCode, Package, Home } from 'lucide-react'
+import { CheckCircle2, Camera, Package, Home } from 'lucide-react'
 import { useStore } from '../store/useStore'
 
 export function Success() {
   const navigate = useNavigate()
-  const { lockerNumber } = useStore()
+  const { lockerNumber, lockerLocation, lockerSize } = useStore()
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-full px-6 py-12 bg-white text-center">
+    <div className="flex flex-col items-center justify-center min-h-full px-6 py-10 bg-white text-center">
       {/* Success icon */}
-      <div className="relative mb-6">
-        <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center">
-          <CheckCircle2 size={56} className="text-green-600" />
+      <div className="relative mb-5">
+        <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center shadow-inner">
+          <CheckCircle2 size={56} className="text-green-700" />
         </div>
-        <div className="absolute -right-1 -top-1 w-7 h-7 bg-green-500 rounded-full flex items-center justify-center animate-bounce">
-          <span className="text-white text-sm">🎉</span>
+        <div className="absolute -right-1 -top-1 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center animate-bounce shadow-md">
+          <span className="text-white text-base">🎉</span>
         </div>
       </div>
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Booking Confirmed!</h1>
-      <p className="text-lg text-green-700 font-semibold mb-2">Locker {lockerNumber} is yours</p>
-      <p className="text-sm text-gray-500 leading-relaxed mb-8 max-w-xs">
-        Head to the locker and open it using your QR code or 6-digit PIN. Countdown has started!
+      <h1 className="text-2xl font-black text-gray-900 mb-1 tracking-tight">Pemesanan Berhasil!</h1>
+      <p className="text-lg text-green-800 font-bold mb-1">Loker {lockerNumber} Siap Digunakan</p>
+      <p className="text-xs text-gray-500 mb-6 font-medium">
+        Ukuran {lockerSize} • {lockerLocation}
       </p>
 
-      {/* Instructions */}
-      <div className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-6 text-left space-y-3">
+      {/* Instructions: Modern QR Scan & Remote Unlock (No outdated PIN) */}
+      <div className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-6 text-left space-y-3 shadow-xs">
         {[
-          { step: '1', text: 'Go to your locker at the hub' },
-          { step: '2', text: 'Scan your QR code or enter 6-digit PIN' },
-          { step: '3', text: 'Door opens — place your items inside' },
-          { step: '4', text: 'Extend anytime from the app, no fines!' },
-        ].map(({ step, text }) => (
-          <div key={step} className="flex items-center gap-3">
-            <span className="w-6 h-6 rounded-full bg-green-700 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+          { step: '1', title: 'Tuju Loker Anda', desc: `Datang ke ${lockerLocation} dan cari pintu nomor ${lockerNumber}.` },
+          { step: '2', title: 'Scan QR di Layar LCD', desc: 'Gunakan kamera HP di aplikasi untuk scan QR dinamis pada pintu loker.' },
+          { step: '3', title: 'Remote Unlock Cadangan', desc: 'Bisa juga tekan tombol Buka Kunci Jarak Jauh di aplikasi via internet.' },
+          { step: '4', title: 'Bebas Denda', desc: 'Perpanjang sewa kapan saja dari aplikasi jika butuh waktu lebih lama.' },
+        ].map(({ step, title, desc }) => (
+          <div key={step} className="flex items-start gap-3">
+            <span className="w-6 h-6 rounded-full bg-green-700 text-white text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
               {step}
             </span>
-            <p className="text-sm text-gray-600">{text}</p>
+            <div className="flex-1">
+              <p className="text-xs font-bold text-gray-800">{title}</p>
+              <p className="text-[11px] text-gray-500 leading-snug">{desc}</p>
+            </div>
           </div>
         ))}
       </div>
 
       {/* Action buttons */}
-      <div className="w-full space-y-3">
+      <div className="w-full space-y-2.5">
         <button
           onClick={() => navigate('/my-qr')}
-          className="w-full py-3.5 bg-green-700 text-white rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-green-700/30 hover:bg-green-800 transition-colors"
+          className="w-full py-4 bg-green-700 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-green-700/30 hover:bg-green-800 active:scale-95 transition-all"
         >
-          <QrCode size={18} />
-          Show my QR
+          <Camera size={18} />
+          Scan Locker QR (Buka Kamera)
         </button>
+
         <button
           onClick={() => navigate('/my-locker')}
-          className="w-full py-3.5 bg-green-50 text-green-700 border border-green-200 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-green-100 transition-colors"
+          className="w-full py-3.5 bg-green-50 text-green-800 border border-green-200 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-green-100 active:scale-95 transition-all"
         >
           <Package size={18} />
-          View my locker
+          Lihat Loker Saya & Remote Unlock
         </button>
+
         <button
           onClick={() => navigate('/')}
-          className="w-full py-3.5 text-gray-500 font-medium text-sm flex items-center justify-center gap-2 hover:text-gray-700 transition-colors"
+          className="w-full py-3 text-gray-500 font-semibold text-xs flex items-center justify-center gap-1.5 hover:text-gray-800 transition-colors"
         >
-          <Home size={16} />
-          Back to home
+          <Home size={15} />
+          Kembali ke Beranda
         </button>
       </div>
     </div>
