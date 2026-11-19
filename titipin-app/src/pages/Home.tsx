@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Bell, ChevronRight, Package,
-  HelpCircle, MessageSquare, Navigation, Radio, Loader2
+  HelpCircle, MessageSquare, Navigation, Loader2
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { formatTime } from '../utils/time'
@@ -21,7 +21,6 @@ export function Home() {
     remainingSeconds,
     unreadNotifications,
     setSelectedHub,
-    connectionStatus,
     setConnectionStatus,
   } = useStore()
 
@@ -75,12 +74,6 @@ export function Home() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Supabase Status indicator */}
-            <span className="flex items-center gap-1 text-[10px] bg-green-800/80 text-green-200 px-2 py-0.5 rounded-full">
-              <Radio size={10} className={connectionStatus === 'connected' ? 'text-green-300 animate-pulse' : 'text-amber-400'} />
-              {connectionStatus === 'connected' ? 'DB Live' : 'Offline'}
-            </span>
-
             <button
               onClick={() => navigate('/notifications')}
               className="relative p-2 rounded-full bg-green-600 hover:bg-green-500 transition-colors"

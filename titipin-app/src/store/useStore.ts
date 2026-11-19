@@ -17,6 +17,7 @@ export interface Transaction {
   duration?: number
   amount: number
   type: 'per-hour' | 'subscription'
+  method?: string
   status: 'success' | 'plan'
 }
 
@@ -63,6 +64,10 @@ interface AppState {
 
   // Notifications badge
   unreadNotifications: number
+
+  // Language preferences
+  language: 'id' | 'en'
+  setLanguage: (lang: 'id' | 'en') => void
 
   // Actions
   setActiveLocker: (data: {
@@ -132,6 +137,9 @@ export const useStore = create<AppState>((set, get) => ({
   transactions: [],
 
   unreadNotifications: 0,
+
+  language: 'id',
+  setLanguage: (lang) => set({ language: lang }),
 
   setActiveLocker: ({ lockerNumber, lockerSize, lockerLocation, duration, bookingId }) =>
     set({

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, MapPin, Package, Clock, CheckCircle2, ShieldCheck, AlertCircle, Sparkles, Crown } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { processBookingTransaction } from '../lib/lockerService'
@@ -40,6 +40,9 @@ const PAYMENT_METHODS = [
 
 export function Payment() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const isSubscriptionMode = searchParams.get('type') === 'subscription'
+
   const {
     selectedHub,
     selectedHubId,
@@ -49,6 +52,7 @@ export function Payment() {
     loadActiveBooking,
     addTransaction,
     hasMonthlyPlan,
+    subscribeMonthly,
     activeBookings,
     userId,
   } = useStore()
@@ -68,12 +72,37 @@ export function Payment() {
 
   // Check if current booking is fully covered by Monthly Pass (S and M lockers, max 3)
   const isCoveredByMonthlyPass =
-    hasMonthlyPlan && (selectedSize === 'S' || selectedSize === 'M') && !isSubscriptionQuotaReached
-  const amount = isCoveredByMonthlyPass ? 0 : selectedDuration * hourlyRate
+    !isSubscriptionMode &&
+    hasMonthlyPlan &&
+    (selectedSize === 'S' || selectedSize === 'M') &&
+    !isSubscriptionQuotaReached
+
+  const amount = isSubscriptionMode
+    ? 125000
+    : isCoveredByMonthlyPass
+    ? 0
+    : selectedDuration * hourlyRate
 
   const handlePay = async () => {
     setLoading(true)
     setErrorMsg(null)
+
+    if (isSubscriptionMode) {
+      try {
+        const res = await subscribeMonthly()
+        if (res.success) {
+          navigate('/success?type=subscription', { replace: true })
+        } else {
+          setErrorMsg(res.message || 'Gagal mengaktifkan paket langganan.')
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        setErrorMsg(msg)
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
 
     try {
       const paymentMethodUsed = isCoveredByMonthlyPass ? 'subscription' : selectedPayment
@@ -116,6 +145,7 @@ export function Payment() {
         duration: selectedDuration,
         amount,
         type: isCoveredByMonthlyPass ? 'subscription' : 'per-hour',
+        method: paymentMethodUsed,
         status: 'success',
       })
 
@@ -149,10 +179,18 @@ export function Payment() {
           </button>
           <div>
             <h1 className="text-xl font-bold tracking-tight">
-              {isCoveredByMonthlyPass ? 'Konfirmasi Sewa (Member Pass)' : 'Pembayaran'}
+              {isSubscriptionMode
+                ? 'Langganan Member VIP'
+                : isCoveredByMonthlyPass
+                ? 'Konfirmasi Sewa (Member Pass)'
+                : 'Pembayaran'}
             </h1>
             <p className="text-green-200 text-xs mt-0.5">
-              {isCoveredByMonthlyPass ? 'Benefit Member VIP: Tanpa biaya jam sewa' : 'Transaksi aman & aktivasi IoT loker instan'}
+              {isSubscriptionMode
+                ? 'Akses loker harian bebas biaya jam sewa di semua hub'
+                : isCoveredByMonthlyPass
+                ? 'Benefit Member VIP: Tanpa biaya jam sewa'
+                : 'Transaksi aman & aktivasi IoT loker instan'}
             </p>
           </div>
         </div>
@@ -161,38 +199,77 @@ export function Payment() {
       <div className="flex-1 px-4 py-5 space-y-5 overflow-y-auto">
         {/* Order summary card */}
         <div>
-          <p className="text-xs text-gray-500 uppercase tracking-wider font-bold mb-3">Ringkasan Pesanan</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider font-bold mb-3">
+            {isSubscriptionMode ? 'Ringkasan Paket Langganan' : 'Ringkasan Pesanan'}
+          </p>
           <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3 shadow-xs">
-            {[
-              { icon: MapPin, label: 'Lokasi Hub', value: selectedHub },
-              { icon: Package, label: 'Ukuran Loker', value: `Size ${selectedSize} (${sizeInfo.label})` },
-              {
-                icon: Clock,
-                label: 'Durasi Sewa',
-                value: `${selectedDuration} Jam (Tarif Normal: ${formatIDR(hourlyRate)}/jam)`,
-              },
-            ].map(({ icon: Icon, label, value }) => (
-              <div key={label} className="flex items-start gap-3">
-                <Icon size={16} className="text-green-700 flex-shrink-0 mt-0.5" />
-                <div className="flex-1 flex justify-between items-start gap-2">
-                  <span className="text-xs text-gray-500 font-medium">{label}</span>
-                  <span className="text-xs font-bold text-gray-900 text-right max-w-[60%] leading-snug">{value}</span>
+            {isSubscriptionMode ? (
+              <>
+                <div className="flex items-start gap-3">
+                  <Crown size={16} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 flex justify-between items-start gap-2">
+                    <span className="text-xs text-gray-500 font-medium">Paket Member</span>
+                    <span className="text-xs font-bold text-gray-900 text-right">VIP Pass (30 Hari)</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+                <div className="flex items-start gap-3">
+                  <MapPin size={16} className="text-green-700 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 flex justify-between items-start gap-2">
+                    <span className="text-xs text-gray-500 font-medium">Cakupan Hub</span>
+                    <span className="text-xs font-bold text-gray-900 text-right">Semua Hub Titipin</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Package size={16} className="text-green-700 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 flex justify-between items-start gap-2">
+                    <span className="text-xs text-gray-500 font-medium">Ukuran Bebas Biaya</span>
+                    <span className="text-xs font-bold text-gray-900 text-right">Size S & Size M</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <Clock size={16} className="text-green-700 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 flex justify-between items-start gap-2">
+                    <span className="text-xs text-gray-500 font-medium">Masa Aktif</span>
+                    <span className="text-xs font-bold text-gray-900 text-right">30 Hari Penuh</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              [
+                { icon: MapPin, label: 'Lokasi Hub', value: selectedHub },
+                { icon: Package, label: 'Ukuran Loker', value: `Size ${selectedSize} (${sizeInfo.label})` },
+                {
+                  icon: Clock,
+                  label: 'Durasi Sewa',
+                  value: `${selectedDuration} Jam (Tarif Normal: ${formatIDR(hourlyRate)}/jam)`,
+                },
+              ].map(({ icon: Icon, label, value }) => (
+                <div key={label} className="flex items-start gap-3">
+                  <Icon size={16} className="text-green-700 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 flex justify-between items-start gap-2">
+                    <span className="text-xs text-gray-500 font-medium">{label}</span>
+                    <span className="text-xs font-bold text-gray-900 text-right max-w-[60%] leading-snug">{value}</span>
+                  </div>
+                </div>
+              ))
+            )}
 
             <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
               <div>
                 <span className="text-sm font-extrabold text-gray-800">Total Tagihan</span>
                 <p className="text-[10px] text-gray-500">
-                  {isCoveredByMonthlyPass ? 'Ditanggung Kuota Member VIP' : 'Termasuk integrasi IoT Supabase'}
+                  {isSubscriptionMode
+                    ? 'Tarif flat 30 hari keanggotaan'
+                    : isCoveredByMonthlyPass
+                    ? 'Ditanggung Kuota Member VIP'
+                    : 'Termasuk integrasi IoT Supabase'}
                 </p>
               </div>
               <div className="text-right">
                 <span className={`text-xl font-black ${isCoveredByMonthlyPass ? 'text-emerald-700' : 'text-green-700'}`}>
                   {formatIDR(amount)}
                 </span>
-                {isCoveredByMonthlyPass && (
+                {!isSubscriptionMode && isCoveredByMonthlyPass && (
                   <p className="text-[10px] text-gray-400 line-through">
                     {formatIDR(selectedDuration * hourlyRate)}
                   </p>
@@ -295,7 +372,12 @@ export function Payment() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <span>Memproses IoT Booking...</span>
+              <span>{isSubscriptionMode ? 'Mengaktifkan Langganan...' : 'Memproses IoT Booking...'}</span>
+            </>
+          ) : isSubscriptionMode ? (
+            <>
+              <Crown size={18} className="text-amber-300" />
+              <span>Bayar & Aktifkan Member VIP • {formatIDR(amount)}</span>
             </>
           ) : isCoveredByMonthlyPass ? (
             <>

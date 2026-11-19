@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown, LogIn, Shield, User, CheckCircle2 } from 'lucide-react'
+import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown, LogIn, Shield, User, CheckCircle2, Check } from 'lucide-react'
 import { useStore } from '../store/useStore'
 
 function formatIDR(amount: number) {
@@ -8,7 +9,8 @@ function formatIDR(amount: number) {
 
 export function Account() {
   const navigate = useNavigate()
-  const { userName, userEmail, isAuthenticated, hasMonthlyPlan, subscribeMonthly, logoutUser } = useStore()
+  const { userName, userEmail, isAuthenticated, hasMonthlyPlan, logoutUser, language, setLanguage } = useStore()
+  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false)
 
   const handleLogout = async () => {
     await logoutUser()
@@ -19,7 +21,12 @@ export function Account() {
     { icon: Bell, label: 'Notifications', action: () => navigate('/notifications') },
     { icon: MessageSquare, label: 'Live chat', action: () => navigate('/live-chat') },
     { icon: HelpCircle, label: 'FAQ', action: () => navigate('/faq') },
-    { icon: Globe, label: 'Language', action: () => {} },
+    {
+      icon: Globe,
+      label: 'Language',
+      value: language === 'id' ? 'Bahasa Indonesia' : 'English',
+      action: () => setIsLanguageModalOpen(true),
+    },
     ...(isAuthenticated
       ? [{ icon: LogOut, label: 'Log out', action: handleLogout, danger: true }]
       : [{ icon: LogIn, label: 'Sign In / Register', action: () => navigate('/auth'), highlight: true }]),
@@ -99,7 +106,7 @@ export function Account() {
                 Cukup {formatIDR(125000)}/bulan untuk akses loker S dan M setiap hari bebas biaya jam sewa.
               </p>
               <button
-                onClick={subscribeMonthly}
+                onClick={() => navigate('/payment?type=subscription')}
                 className="w-full py-3 bg-green-700 text-white rounded-xl font-bold text-xs hover:bg-green-800 active:scale-95 transition-all shadow-sm"
               >
                 Berlangganan Sekarang — {formatIDR(125000)}/bulan
@@ -125,7 +132,7 @@ export function Account() {
 
         {/* Menu items */}
         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden divide-y divide-gray-100 shadow-xs">
-          {menuItems.map(({ icon: Icon, label, action, danger, highlight }: any) => (
+          {menuItems.map(({ icon: Icon, label, action, danger, highlight, value }: any) => (
             <button
               key={label}
               onClick={action}
@@ -141,13 +148,100 @@ export function Account() {
                 <Icon size={18} className={danger ? 'text-red-400' : highlight ? 'text-green-600' : 'text-gray-400'} />
                 <span className="text-sm font-medium">{label}</span>
               </div>
-              {!danger && <ChevronRight size={16} className={highlight ? 'text-green-600' : 'text-gray-300'} />}
+              <div className="flex items-center gap-2">
+                {value && <span className="text-xs text-gray-400 font-medium">{value}</span>}
+                {!danger && <ChevronRight size={16} className={highlight ? 'text-green-600' : 'text-gray-300'} />}
+              </div>
             </button>
           ))}
         </div>
 
         <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.0 • Connected to Supabase Auth</p>
       </div>
+
+      {/* Language Selection Dialog / Popup */}
+      {isLanguageModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-green-100 text-green-700 flex items-center justify-center">
+                  <Globe size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-gray-900">
+                    {language === 'id' ? 'Pilih Bahasa' : 'Select Language'}
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    {language === 'id' ? 'Preferensi bahasa aplikasi' : 'Application language preference'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsLanguageModalOpen(false)}
+                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xs font-bold transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2.5 pt-1">
+              {[
+                {
+                  code: 'id' as const,
+                  label: 'Bahasa Indonesia',
+                  desc: 'Bahasa Indonesia (ID)',
+                  flag: '🇮🇩',
+                },
+                {
+                  code: 'en' as const,
+                  label: 'English',
+                  desc: 'English (US)',
+                  flag: '🇺🇸',
+                },
+              ].map((opt) => {
+                const isSelected = language === opt.code
+                return (
+                  <button
+                    key={opt.code}
+                    onClick={() => {
+                      setLanguage(opt.code)
+                      setIsLanguageModalOpen(false)
+                    }}
+                    className={`w-full flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all ${
+                      isSelected
+                        ? 'border-green-600 bg-green-50/70 text-green-900 font-bold shadow-xs'
+                        : 'border-gray-200 bg-white hover:border-gray-300 text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{opt.flag}</span>
+                      <div className="text-left">
+                        <p className="text-sm font-bold text-gray-900">{opt.label}</p>
+                        <p className="text-xs text-gray-500">{opt.desc}</p>
+                      </div>
+                    </div>
+                    {isSelected ? (
+                      <div className="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center shadow-xs">
+                        <Check size={14} className="stroke-[3]" />
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            <button
+              onClick={() => setIsLanguageModalOpen(false)}
+              className="w-full mt-2 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all"
+            >
+              {language === 'id' ? 'Batal' : 'Cancel'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

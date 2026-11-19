@@ -1,10 +1,20 @@
 import { useState } from 'react'
-import { Receipt, CalendarDays, MapPin, CreditCard, ArrowLeft } from 'lucide-react'
+import { Receipt, CalendarDays, MapPin, CreditCard, ArrowLeft, Clock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
 
 function formatIDR(amount: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
+}
+
+function formatDate(dateStr: string) {
+  try {
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return dateStr
+    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+  } catch {
+    return dateStr
+  }
 }
 
 const FILTERS = [
@@ -110,22 +120,30 @@ export function Transactions() {
                           </span>
                         </div>
 
-                        <p className="text-xs text-gray-600 flex items-center gap-1 truncate mb-1">
-                          <MapPin size={11} className="text-gray-400 flex-shrink-0" />
+                        <p className="text-xs text-gray-600 flex items-center gap-1 truncate mb-2">
+                          <MapPin size={12} className="text-gray-400 flex-shrink-0" />
                           <span>{tx.location}</span>
                         </p>
 
-                        <div className="flex items-center gap-2 text-[11px] text-gray-400">
-                          <span>{tx.date}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Date Badge */}
+                          <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 text-[10px] font-medium px-2 py-0.5 rounded-md border border-gray-200/60">
+                            <CalendarDays size={11} className="text-gray-400" />
+                            {formatDate(tx.date)}
+                          </span>
+
+                          {/* Duration Badge */}
                           {tx.duration && (
-                            <>
-                              <span>•</span>
-                              <span>{tx.duration} Jam</span>
-                            </>
+                            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 rounded-md border border-emerald-200/60">
+                              <Clock size={11} className="text-emerald-600" />
+                              {tx.duration} Jam
+                            </span>
                           )}
-                          <span>•</span>
-                          <span className="flex items-center gap-1 text-gray-500 font-medium">
-                            <CreditCard size={11} /> QRIS / VA
+
+                          {/* Payment Method Badge */}
+                          <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-[10px] font-semibold px-2 py-0.5 rounded-md border border-blue-200/60">
+                            <CreditCard size={11} className="text-blue-600" />
+                            {isSubscription ? 'Langganan VIP' : (tx.method || 'QRIS / VA')}
                           </span>
                         </div>
                       </div>

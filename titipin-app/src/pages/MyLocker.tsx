@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Unlock, Package, CheckCircle2, AlertTriangle, Camera, ShieldCheck, Sparkles } from 'lucide-react'
+import { Plus, Unlock, Package, CheckCircle2, AlertTriangle, Camera, ShieldCheck, Sparkles, Loader2 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { formatTime } from '../utils/time'
+import { fetchFinishedBookings } from '../lib/lockerService'
+import type { Booking } from '../lib/database.types'
+
+function formatIDR(amount: number) {
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
+}
 
 export function MyLocker() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<'active' | 'finished'>('active')
   const [extendToast, setExtendToast] = useState<string | null>(null)
+  const [finishedBookings, setFinishedBookings] = useState<Booking[]>([])
+  const [loadingFinished, setLoadingFinished] = useState(false)
   const {
     hasActiveLocker,
     activeBookings,
@@ -29,6 +37,24 @@ export function MyLocker() {
   useEffect(() => {
     loadActiveBooking(userId || undefined)
   }, [loadActiveBooking, userId])
+
+  useEffect(() => {
+    const loadFinished = async () => {
+      setLoadingFinished(true)
+      try {
+        const { data } = await fetchFinishedBookings(userId || undefined)
+        setFinishedBookings(data || [])
+      } catch (err) {
+        console.warn('Failed to load finished bookings:', err)
+      } finally {
+        setLoadingFinished(false)
+      }
+    }
+
+    if (activeTab === 'finished') {
+      loadFinished()
+    }
+  }, [activeTab, userId])
 
   useEffect(() => {
     intervalRef.current = setInterval(() => tickLockerTimer(), 1000)
@@ -283,40 +309,62 @@ export function MyLocker() {
               </button>
             </div>
           )
-        ) : (
-          /* Finished Tab: Transaction / Completed rentals list */
+        ) : loadingFinished ? (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2">
+            <Loader2 className="animate-spin text-green-700" size={24} />
+            <span className="text-xs">Memuat riwayat loker...</span>
+          </div>
+        ) : finishedBookings.length > 0 ? (
           <div className="space-y-3">
-            {[
-              { num: 'M-07', loc: 'Petra Christian University', date: 'Hari ini', dur: '2 jam', amt: 'Rp6.000', size: 'M' },
-              { num: 'S-03', loc: 'Gubeng Station', date: '14 Nov 2026', dur: '1 jam', amt: 'Rp2.000', size: 'S' },
-              { num: 'M-04', loc: 'Tunjungan Plaza', date: '10 Nov 2026', dur: '3 jam', amt: 'Rp9.000', size: 'M' },
-              { num: 'L-01', loc: 'Petra Library Hub', date: '5 Nov 2026', dur: '2 jam', amt: 'Rp10.000', size: 'L' },
-            ].map((item, idx) => (
-              <div key={idx} className="bg-gray-50 border border-gray-200 rounded-2xl p-4 shadow-xs">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gray-200 text-gray-600 flex items-center justify-center flex-shrink-0">
-                      <CheckCircle2 size={18} className="text-green-700" />
+            {finishedBookings.map((b) => {
+              const lockerNum = b.locker?.locker_number || 'M-07'
+              const lockerSz = b.locker?.size || 'M'
+              const locName = b.hub?.name || 'Titipin Hub'
+              const dateStr = b.created_at
+                ? new Date(b.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                : 'Hari ini'
+              const durationStr = `${b.hours_booked || 1} jam`
+              const amtStr = formatIDR(b.amount_paid || 0)
+
+              return (
+                <div key={b.id} className="bg-gray-50 border border-gray-200 rounded-2xl p-4 shadow-xs">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gray-200 text-gray-600 flex items-center justify-center flex-shrink-0">
+                        <CheckCircle2 size={18} className="text-green-700" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">
+                          Loker {lockerNum} <span className="text-xs font-semibold text-gray-500">(Size {lockerSz})</span>
+                        </p>
+                        <p className="text-xs text-gray-500">{locName}</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">
+                          {dateStr} • Durasi {durationStr}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-900">
-                        Loker {item.num} <span className="text-xs font-semibold text-gray-500">(Size {item.size})</span>
-                      </p>
-                      <p className="text-xs text-gray-500">{item.loc}</p>
-                      <p className="text-[11px] text-gray-400 mt-0.5">
-                        {item.date} • Durasi {item.dur}
-                      </p>
+                    <div className="text-right">
+                      <span className="text-sm font-extrabold text-gray-900">{amtStr}</span>
+                      <span className={`block text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 ${
+                        b.status === 'cancelled' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
+                      }`}>
+                        {b.status === 'cancelled' ? 'Dibatalkan' : 'Selesai'}
+                      </span>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm font-extrabold text-gray-900">{item.amt}</span>
-                    <span className="block text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full mt-1">
-                      Selesai
-                    </span>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-16 text-gray-400">
+            <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3 text-gray-400">
+              <CheckCircle2 size={32} />
+            </div>
+            <p className="text-sm font-bold text-gray-700">Belum Ada Riwayat Selesai</p>
+            <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+              Riwayat pemakaian loker yang telah selesai akan muncul di sini.
+            </p>
           </div>
         )}
       </div>

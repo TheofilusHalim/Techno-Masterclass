@@ -376,7 +376,7 @@ export async function createBooking(
     const { data: bookingData, error: bookingErr } = await supabase
       .from('bookings')
       .insert(bookingPayload)
-      .select('*, locker:lockers(*), hub:hubs(*)')
+      .select('*, locker:lockers!bookings_locker_id_fkey(*), hub:hubs(*)')
       .maybeSingle()
 
     if (bookingErr) {
@@ -565,7 +565,7 @@ export async function extendBooking(
     if (isValidUUID(bookingIdOrLockerNumber)) {
       const { data } = await supabase
         .from('bookings')
-        .select('*, locker:lockers(*), hub:hubs(*)')
+        .select('*, locker:lockers!bookings_locker_id_fkey(*), hub:hubs(*)')
         .eq('id', bookingIdOrLockerNumber)
         .maybeSingle()
       if (data) booking = data as Booking
@@ -582,7 +582,7 @@ export async function extendBooking(
       if (lockers && lockers.length > 0 && lockers[0].current_booking_id) {
         const { data } = await supabase
           .from('bookings')
-          .select('*, locker:lockers(*), hub:hubs(*)')
+          .select('*, locker:lockers!bookings_locker_id_fkey(*), hub:hubs(*)')
           .eq('id', lockers[0].current_booking_id)
           .maybeSingle()
         if (data) booking = data as Booking
@@ -593,7 +593,7 @@ export async function extendBooking(
     if (!booking) {
       const { data: activeBookings } = await supabase
         .from('bookings')
-        .select('*, locker:lockers(*), hub:hubs(*)')
+        .select('*, locker:lockers!bookings_locker_id_fkey(*), hub:hubs(*)')
         .in('status', ['active', 'extended'])
         .order('created_at', { ascending: false })
         .limit(1)
@@ -620,7 +620,7 @@ export async function extendBooking(
           updated_at: new Date().toISOString(),
         })
         .eq('id', booking.id)
-        .select('*, locker:lockers(*), hub:hubs(*)')
+        .select('*, locker:lockers!bookings_locker_id_fkey(*), hub:hubs(*)')
         .maybeSingle()
 
       if (!updateErr && resData) {
@@ -708,7 +708,7 @@ export async function fetchActiveBookings(
       .from('bookings')
       .select(`
         *,
-        locker:lockers(*),
+        locker:lockers!bookings_locker_id_fkey(*),
         hub:hubs(*)
       `)
       .in('status', ['active', 'extended'])
@@ -717,6 +717,53 @@ export async function fetchActiveBookings(
 
     if (error) {
       console.error('Error fetching active bookings:', error)
+      return { data: [], error: error.message }
+    }
+
+    return { data: (data || []) as Booking[], error: null }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { data: [], error: msg }
+  }
+}
+
+/**
+ * Loads all finished or past bookings for a specific user with locker and hub relations.
+ */
+export async function fetchFinishedBookings(
+  userId?: string
+): Promise<{ data: Booking[]; error: string | null }> {
+  try {
+    let effectiveUserId = userId
+
+    if (!effectiveUserId || !isValidUUID(effectiveUserId)) {
+      try {
+        const { data: authData } = await supabase.auth.getUser()
+        if (authData?.user?.id && isValidUUID(authData.user.id)) {
+          effectiveUserId = authData.user.id
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!effectiveUserId || !isValidUUID(effectiveUserId)) {
+      return { data: [], error: null }
+    }
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .select(`
+        *,
+        locker:lockers!bookings_locker_id_fkey(*),
+        hub:hubs(*)
+      `)
+      .in('status', ['finished', 'cancelled'])
+      .eq('user_id', effectiveUserId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching finished bookings:', error)
       return { data: [], error: error.message }
     }
 
