@@ -1,18 +1,34 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Clock, CheckCircle2, MapPin, Bell, Trash2, Sparkles, KeyRound } from 'lucide-react'
+import { ArrowLeft, Clock, CheckCircle2, MapPin, Bell, Trash2, Sparkles, KeyRound, ShieldCheck } from 'lucide-react'
 import { useStore, type AppNotification } from '../store/useStore'
 import { useTranslation } from '../utils/i18n'
+import { requestNotificationPermission } from '../lib/notificationService'
 
 export function Notifications() {
   const navigate = useNavigate()
   const { notifications, addNotification, clearNotifications, markNotificationsRead } = useStore()
   const { t, language } = useTranslation()
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   // Mark read when screen opens safely inside useEffect
   useEffect(() => {
     markNotificationsRead()
   }, [markNotificationsRead])
+
+  const showFeedback = (msg: string) => {
+    setToastMessage(msg)
+    setTimeout(() => setToastMessage(null), 3500)
+  }
+
+  const handleRequestPermission = async () => {
+    const granted = await requestNotificationPermission()
+    if (granted) {
+      showFeedback(language === 'en' ? 'System notifications enabled!' : 'Izin notifikasi sistem aktif!')
+    } else {
+      showFeedback(language === 'en' ? 'Permission requested or already set.' : 'Izin notifikasi telah diminta.')
+    }
+  }
 
   const getIconForType = (type: AppNotification['type']) => {
     switch (type) {
@@ -40,6 +56,7 @@ export function Notifications() {
       action: '/my-locker',
       actionLabel: language === 'en' ? 'Open My Locker' : 'Buka Loker Saya',
     })
+    showFeedback(language === 'en' ? 'Payment notification sent to phone!' : 'Notifikasi pembayaran dikirim ke HP!')
   }
 
   const triggerSimulateWarning = () => {
@@ -54,6 +71,7 @@ export function Notifications() {
       action: '/my-locker',
       actionLabel: language === 'en' ? 'Extend Now' : 'Perpanjang Sekarang',
     })
+    showFeedback(language === 'en' ? '10-minute warning sent to phone!' : 'Peringatan sisa 10 menit dikirim ke HP!')
   }
 
   const triggerSimulateUnlock = () => {
@@ -68,6 +86,7 @@ export function Notifications() {
       action: '/my-locker',
       actionLabel: language === 'en' ? 'Check Status' : 'Lihat Status',
     })
+    showFeedback(language === 'en' ? 'Door unlock notification sent to phone!' : 'Notifikasi buka pintu dikirim ke HP!')
   }
 
   return (
@@ -132,6 +151,17 @@ export function Notifications() {
               <span className="text-center leading-tight">{t('notifSimulateUnlock')}</span>
             </button>
           </div>
+
+          <div className="mt-2.5 pt-2 border-t border-green-200/60 flex items-center justify-between text-[11px]">
+            <span className="text-gray-500">{language === 'en' ? 'System Notification Permission:' : 'Izin Notifikasi HP:'}</span>
+            <button
+              onClick={handleRequestPermission}
+              className="text-green-700 font-bold hover:underline flex items-center gap-1"
+            >
+              <ShieldCheck size={13} />
+              <span>{language === 'en' ? 'Check / Enable' : 'Cek / Aktifkan'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Notifications list */}
@@ -175,6 +205,14 @@ export function Notifications() {
           </div>
         )}
       </div>
+
+      {/* Toast Feedback */}
+      {toastMessage && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] bg-gray-900/90 text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg backdrop-blur-xs flex items-center gap-2 border border-white/10 animate-fade-in whitespace-nowrap">
+          <CheckCircle2 size={16} className="text-emerald-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { BottomNav } from './BottomNav'
 import { useStore } from '../store/useStore'
 import { supabase } from '../lib/supabase'
 import { checkForAppUpdate, type AppVersionInfo } from '../lib/versionService'
+import { requestNotificationPermission } from '../lib/notificationService'
 import { AppUpdateModal } from './AppUpdateModal'
 
 export function AppShell() {
@@ -14,6 +15,9 @@ export function AppShell() {
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
 
   useEffect(() => {
+    // Request native Android notification permission & initialize channel
+    requestNotificationPermission().catch(console.warn)
+
     // Check for new app updates in Supabase
     checkForAppUpdate().then((update) => {
       if (update) {

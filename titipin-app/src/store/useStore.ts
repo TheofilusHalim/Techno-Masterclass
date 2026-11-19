@@ -7,6 +7,7 @@ import {
 } from '../lib/lockerService'
 import type { Booking, AccessMethod } from '../lib/database.types'
 import { supabase } from '../lib/supabase'
+import { sendSystemNotification } from '../lib/notificationService'
 
 export interface Transaction {
   id: string
@@ -177,6 +178,11 @@ export const useStore = create<AppState>((set, get) => ({
       notifications: [newNotif, ...s.notifications],
       unreadNotifications: s.unreadNotifications + 1,
     }))
+    // Trigger native Android system notification banner + sound
+    sendSystemNotification({
+      title: notif.title,
+      body: notif.message,
+    }).catch((err) => console.warn('System notification error:', err))
   },
 
   clearNotifications: () => set({ notifications: [], unreadNotifications: 0 }),
