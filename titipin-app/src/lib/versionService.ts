@@ -13,10 +13,10 @@ export interface AppVersionInfo {
   released_at: string
 }
 
-// Current fallback app version (v1.0.3)
+// Current fallback app version (v1.0.4)
 export const CURRENT_APP_VERSION = {
-  versionCode: 103,
-  versionName: '1.0.3',
+  versionCode: 104,
+  versionName: '1.0.4',
 }
 
 /**
