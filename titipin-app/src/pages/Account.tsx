@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown, LogIn, Shield, User, CheckCircle2, Check, ArrowUpCircle } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useTranslation } from '../utils/i18n'
-import { checkForAppUpdate, CURRENT_APP_VERSION, type AppVersionInfo } from '../lib/versionService'
+import { checkForAppUpdate, getInstalledAppVersion, CURRENT_APP_VERSION, type AppVersionInfo } from '../lib/versionService'
 import { AppUpdateModal } from '../components/AppUpdateModal'
 
 function formatIDR(amount: number) {
@@ -18,6 +18,11 @@ export function Account() {
   const [manualUpdateInfo, setManualUpdateInfo] = useState<AppVersionInfo | null>(null)
   const [isManualUpdateOpen, setIsManualUpdateOpen] = useState(false)
   const [updateToast, setUpdateToast] = useState<string | null>(null)
+  const [currentVersionName, setCurrentVersionName] = useState(CURRENT_APP_VERSION.versionName)
+
+  useEffect(() => {
+    getInstalledAppVersion().then((v) => setCurrentVersionName(v.versionName))
+  }, [])
 
   const handleLogout = async () => {
     await logoutUser()
@@ -32,8 +37,8 @@ export function Account() {
     } else {
       setUpdateToast(
         language === 'en'
-          ? `Titipin is up to date (v${CURRENT_APP_VERSION.versionName}).`
-          : `Aplikasi Titipin sudah versi terbaru (v${CURRENT_APP_VERSION.versionName}).`
+          ? `Titipin is up to date (v${currentVersionName}).`
+          : `Aplikasi Titipin sudah versi terbaru (v${currentVersionName}).`
       )
       setTimeout(() => setUpdateToast(null), 3500)
     }
@@ -52,7 +57,7 @@ export function Account() {
     {
       icon: ArrowUpCircle,
       label: language === 'en' ? 'Check for Updates' : 'Pembaruan Aplikasi',
-      value: `v${CURRENT_APP_VERSION.versionName}`,
+      value: `v${currentVersionName}`,
       action: handleCheckUpdate,
     },
     ...(isAuthenticated

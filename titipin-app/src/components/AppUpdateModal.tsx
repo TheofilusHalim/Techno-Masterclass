@@ -1,6 +1,7 @@
+import { useState, useEffect } from 'react'
 import { Sparkles, Download, ArrowUpCircle } from 'lucide-react'
 import type { AppVersionInfo } from '../lib/versionService'
-import { CURRENT_APP_VERSION } from '../lib/versionService'
+import { CURRENT_APP_VERSION, getInstalledAppVersion } from '../lib/versionService'
 import { useTranslation } from '../utils/i18n'
 
 interface AppUpdateModalProps {
@@ -11,6 +12,11 @@ interface AppUpdateModalProps {
 
 export function AppUpdateModal({ updateInfo, isOpen, onClose }: AppUpdateModalProps) {
   const { language } = useTranslation()
+  const [currentVersion, setCurrentVersion] = useState(CURRENT_APP_VERSION.versionName)
+
+  useEffect(() => {
+    getInstalledAppVersion().then((v) => setCurrentVersion(v.versionName))
+  }, [])
 
   if (!isOpen) return null
 
@@ -38,7 +44,7 @@ export function AppUpdateModal({ updateInfo, isOpen, onClose }: AppUpdateModalPr
           </span>
           <h2 className="text-xl font-black tracking-tight">{updateInfo.title || 'Titipin App Update'}</h2>
           <div className="flex items-center justify-center gap-2 mt-2 text-xs text-green-200 font-mono">
-            <span className="bg-black/25 px-2 py-0.5 rounded-md">v{CURRENT_APP_VERSION.versionName}</span>
+            <span className="bg-black/25 px-2 py-0.5 rounded-md">v{currentVersion}</span>
             <span>→</span>
             <span className="bg-emerald-500 text-white font-bold px-2 py-0.5 rounded-md">v{updateInfo.version_name}</span>
           </div>
