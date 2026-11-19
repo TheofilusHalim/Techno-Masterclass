@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { Geolocation } from '@capacitor/geolocation'
+import { Capacitor } from '@capacitor/core'
 import type { HubWithStats } from '../lib/lockerService'
 
 // Fix default Leaflet marker icon broken in Vite/Webpack
@@ -140,87 +142,128 @@ export function LiveMap({ hubs, onSelectHub }: LiveMapProps) {
     })
   }, [hubs, onSelectHub])
 
-  // Get user GPS location
-  useEffect(() => {
-    if (!mapRef.current) return
-    if (!navigator.geolocation) {
-      setLocationStatus('denied')
-      return
+  const fitToHubs = useCallback(() => {
+    if (hubs.length > 0 && mapRef.current) {
+      const pts = hubs
+        .filter((h) => h.lat && h.lng)
+        .map((h) => [h.lat!, h.lng!] as L.LatLngExpression)
+      if (pts.length > 0) {
+        mapRef.current.fitBounds(L.latLngBounds(pts), { padding: [32, 32], maxZoom: 15 })
+      }
+    }
+  }, [hubs])
+
+  // Get user GPS location via Capacitor Native Plugin (with runtime permission prompt) or Browser fallback
+  const fetchUserLocation = useCallback(async () => {
+    const map = mapRef.current
+    if (!map) return
+
+    setLocationStatus('loading')
+
+    const createPulsingUserMarker = (lat: number, lng: number) => {
+      userMarkerRef.current?.remove()
+      const userIcon = L.divIcon({
+        className: '',
+        html: `
+          <div style="
+            width:16px;height:16px;
+            background:#3b82f6;
+            border:3px solid white;
+            border-radius:50%;
+            box-shadow:0 0 0 4px rgba(59,130,246,0.3);
+            animation:pulse-map 1.5s infinite;
+          "></div>
+          <style>
+            @keyframes pulse-map {
+              0%,100%{box-shadow:0 0 0 4px rgba(59,130,246,0.3)}
+              50%{box-shadow:0 0 0 10px rgba(59,130,246,0.1)}
+            }
+          </style>
+        `,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+      })
+
+      userMarkerRef.current = L.marker([lat, lng], { icon: userIcon })
+        .addTo(map)
+        .bindPopup('<strong>Lokasi kamu</strong>', { closeButton: false })
+
+      const allPoints: L.LatLngExpression[] = [[lat, lng]]
+      hubs.forEach((h) => {
+        if (h.lat && h.lng) allPoints.push([h.lat, h.lng])
+      })
+      if (allPoints.length > 1) {
+        map.fitBounds(L.latLngBounds(allPoints), { padding: [32, 32], maxZoom: 15 })
+      } else {
+        map.setView([lat, lng], 15)
+      }
+      setLocationStatus('ok')
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords
-        const map = mapRef.current
-        if (!map) return
-
-        // Remove old user marker
-        userMarkerRef.current?.remove()
-
-        // Pulsing blue dot
-        const userIcon = L.divIcon({
-          className: '',
-          html: `
-            <div style="
-              width:16px;height:16px;
-              background:#3b82f6;
-              border:3px solid white;
-              border-radius:50%;
-              box-shadow:0 0 0 4px rgba(59,130,246,0.3);
-              animation:pulse-map 1.5s infinite;
-            "></div>
-            <style>
-              @keyframes pulse-map {
-                0%,100%{box-shadow:0 0 0 4px rgba(59,130,246,0.3)}
-                50%{box-shadow:0 0 0 10px rgba(59,130,246,0.1)}
-              }
-            </style>
-          `,
-          iconSize: [16, 16],
-          iconAnchor: [8, 8],
-        })
-
-        userMarkerRef.current = L.marker([latitude, longitude], { icon: userIcon })
-          .addTo(map)
-          .bindPopup('<strong>Lokasi kamu</strong>', { closeButton: false })
-
-        // Pan map to show user + hubs: fit bounds
-        const allPoints: L.LatLngExpression[] = [[latitude, longitude]]
-        hubs.forEach((h) => { if (h.lat && h.lng) allPoints.push([h.lat, h.lng]) })
-        if (allPoints.length > 1) {
-          map.fitBounds(L.latLngBounds(allPoints), { padding: [32, 32], maxZoom: 15 })
-        } else {
-          map.setView([latitude, longitude], 14)
-        }
-
-        setLocationStatus('ok')
-      },
-      () => {
-        setLocationStatus('denied')
-        // Fallback: fit to hub markers
-        if (hubs.length > 0 && mapRef.current) {
-          const pts = hubs
-            .filter((h) => h.lat && h.lng)
-            .map((h) => [h.lat!, h.lng!] as L.LatLngExpression)
-          if (pts.length > 0) {
-            mapRef.current.fitBounds(L.latLngBounds(pts), { padding: [32, 32], maxZoom: 15 })
+    try {
+      // 1. If running natively on Android, explicitly request permission so Android popup appears
+      if (Capacitor.isNativePlatform()) {
+        const check = await Geolocation.checkPermissions()
+        if (check.location !== 'granted') {
+          const req = await Geolocation.requestPermissions()
+          if (req.location !== 'granted') {
+            setLocationStatus('denied')
+            fitToHubs()
+            return
           }
         }
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    )
-  }, [hubs])
+      }
+
+      // 2. Fetch current high-accuracy coordinates
+      const coordinates = await Geolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 10000,
+      })
+
+      createPulsingUserMarker(coordinates.coords.latitude, coordinates.coords.longitude)
+    } catch (err) {
+      console.warn('Capacitor Geolocation error, trying browser fallback:', err)
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            createPulsingUserMarker(pos.coords.latitude, pos.coords.longitude)
+          },
+          () => {
+            setLocationStatus('denied')
+            fitToHubs()
+          },
+          { enableHighAccuracy: true, timeout: 8000 }
+        )
+      } else {
+        setLocationStatus('denied')
+        fitToHubs()
+      }
+    }
+  }, [hubs, fitToHubs])
+
+  useEffect(() => {
+    fetchUserLocation()
+  }, [fetchUserLocation])
 
   return (
     <div className="relative w-full rounded-2xl overflow-hidden border border-green-200 shadow-sm" style={{ height: 192 }}>
       <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
 
-      {/* Location status badge */}
-      <div className="absolute bottom-2 left-2 z-[1000] flex items-center gap-1 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-[10px] font-medium shadow-sm">
-        {locationStatus === 'loading' && <span className="text-gray-500">📍 Mencari lokasi…</span>}
-        {locationStatus === 'ok' && <span className="text-blue-600">📍 Lokasi ditemukan</span>}
-        {locationStatus === 'denied' && <span className="text-orange-500">📍 GPS tidak aktif</span>}
-      </div>
+      {/* Location status badge with clickable retry */}
+      <button
+        onClick={() => fetchUserLocation()}
+        type="button"
+        className="absolute bottom-2 left-2 z-[1000] flex items-center gap-1.5 bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-[10px] font-medium shadow-md transition-all active:scale-95 cursor-pointer hover:bg-white"
+        title="Klik untuk mendeteksi ulang lokasi GPS"
+      >
+        {locationStatus === 'loading' && <span className="text-gray-600 animate-pulse">📍 Mencari lokasi…</span>}
+        {locationStatus === 'ok' && <span className="text-blue-600 font-semibold">📍 Lokasi ditemukan</span>}
+        {locationStatus === 'denied' && (
+          <span className="text-orange-600 font-semibold flex items-center gap-1">
+            📍 GPS tidak aktif • <span className="underline">Minta Akses</span>
+          </span>
+        )}
+      </button>
 
       {/* OSM attribution badge */}
       <div className="absolute bottom-2 right-2 z-[1000] bg-white/80 px-1.5 py-0.5 rounded text-[9px] text-gray-500">
