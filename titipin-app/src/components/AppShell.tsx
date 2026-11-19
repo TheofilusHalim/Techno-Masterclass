@@ -3,11 +3,25 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { useStore } from '../store/useStore'
 import { supabase } from '../lib/supabase'
+import { checkForAppUpdate, type AppVersionInfo } from '../lib/versionService'
+import { AppUpdateModal } from './AppUpdateModal'
 
 export function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const [availableUpdate, setAvailableUpdate] = useState<AppVersionInfo | null>(null)
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
+
+  useEffect(() => {
+    // Check for new app updates in Supabase
+    checkForAppUpdate().then((update) => {
+      if (update) {
+        setAvailableUpdate(update)
+        setIsUpdateModalOpen(true)
+      }
+    })
+  }, [])
 
   useEffect(() => {
     // Check current session from Supabase on mount
@@ -91,6 +105,15 @@ export function AppShell() {
           <Outlet />
         </main>
         <BottomNav />
+
+        {/* In-App Update Modal Prompt */}
+        {availableUpdate && (
+          <AppUpdateModal
+            updateInfo={availableUpdate}
+            isOpen={isUpdateModalOpen}
+            onClose={() => setIsUpdateModalOpen(false)}
+          />
+        )}
       </div>
     </div>
   )
