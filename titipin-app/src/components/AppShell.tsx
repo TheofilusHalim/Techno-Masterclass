@@ -100,12 +100,14 @@ export function AppShell() {
     )
   }
 
+  const isFullScreenPage = ['/chat-support'].includes(location.pathname)
+
   return (
     <div className="min-h-screen bg-gray-50 flex justify-center">
       {/* Mobile viewport */}
       <div className="relative w-full max-w-md bg-white min-h-screen flex flex-col shadow-xl">
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto pb-20">
+        <main className={`flex-1 flex flex-col ${isFullScreenPage ? 'overflow-hidden h-screen max-h-screen' : 'overflow-y-auto pb-20'}`}>
           <Outlet />
         </main>
         <BottomNav />

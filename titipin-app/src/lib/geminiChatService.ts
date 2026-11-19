@@ -1,10 +1,38 @@
+import { supabase } from './supabase'
+
 /**
  * Gemini AI Customer Support Service for Titipin 24/7 Live Chat
  */
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ''
 // Recommended fast & responsive model for chat interactions
 const GEMINI_MODEL = 'gemini-3.5-flash-lite'
+let cachedApiKey = ''
+
+/**
+ * Dynamically fetches Gemini API key from Supabase app_config table.
+ * This guarantees that NO secret API key is ever hardcoded or bundled inside
+ * the client-side JavaScript or Android APK binary.
+ */
+export async function getGeminiApiKey(): Promise<string> {
+  if (cachedApiKey) return cachedApiKey
+
+  try {
+    const { data } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', 'gemini_api_key')
+      .single()
+
+    if (data?.value && data.value.trim().length > 0) {
+      cachedApiKey = data.value.trim()
+      return cachedApiKey
+    }
+  } catch (err) {
+    console.warn('Failed to load gemini_api_key from Supabase app_config:', err)
+  }
+
+  return import.meta.env.VITE_GEMINI_API_KEY || ''
+}
 
 export interface ChatMessage {
   id: number
@@ -75,7 +103,8 @@ export async function askGeminiCustomerSupport(
   newMessage: string,
   userContext: UserContext
 ): Promise<string> {
-  if (!GEMINI_API_KEY) {
+  const apiKey = await getGeminiApiKey()
+  if (!apiKey) {
     return 'Halo! Layanan AI CS sedang disiapkan. Ada yang bisa saya bantu terkait sewa loker Titipin?'
   }
 
@@ -103,7 +132,7 @@ export async function askGeminiCustomerSupport(
   ]
 
   try {
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -27,7 +27,7 @@ export function ChatSupport() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [agentTyping, setAgentTyping] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
 
   const userContext: UserContext = {
     userName,
@@ -58,8 +58,14 @@ export function ChatSupport() {
     ])
   }, [language, topic, userName])
 
+  // Scroll ONLY the message container smoothly, keeping header fixed at the top
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      })
+    }
   }, [messages, agentTyping])
 
   const sendMessage = async () => {
@@ -118,9 +124,9 @@ export function ChatSupport() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-white">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-green-700 via-green-800 to-emerald-900 px-4 pt-12 pb-4 flex-shrink-0 shadow-md">
+    <div className="flex flex-col h-full bg-white overflow-hidden relative">
+      {/* Header - Fixed / Sticky at Top */}
+      <div className="sticky top-0 z-30 bg-gradient-to-r from-green-700 via-green-800 to-emerald-900 px-4 pt-12 pb-4 flex-shrink-0 shadow-md">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -152,8 +158,11 @@ export function ChatSupport() {
         </div>
       </div>
 
-      {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 bg-gray-50">
+      {/* Messages Feed - The ONLY section that scrolls */}
+      <div
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 bg-gray-50 overscroll-contain"
+      >
         {messages.map((msg) => (
           <div key={msg.id} className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[85%] ${msg.from === 'user' ? '' : 'flex items-end gap-2'}`}>
@@ -200,7 +209,6 @@ export function ChatSupport() {
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Field */}
