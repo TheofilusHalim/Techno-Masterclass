@@ -126,16 +126,6 @@ cd android
 File APK siap instal akan berada di:  
 `titipin-app/android/app/build/outputs/apk/debug/app-debug.apk`
 
----
-
-## 👨‍💻 Kontributor & Konteks Akademik
-
-- **Pengembang:** Theofilus Halim (Kevin) & Tim Proyek Technopreneurship
-- **Program Studi:** S1 Sistem Informasi Bisnis (Enterprise Information Systems)
-- **Institusi:** Universitas Kristen Petra, Surabaya, Indonesia
-- **Tahun Akademik:** 2026
-
----
 
 <p align="center">
   <i>Titipin — Solusi Penitipan Barang Pintar, Aman, dan Nyaman di Era Digital.</i>
