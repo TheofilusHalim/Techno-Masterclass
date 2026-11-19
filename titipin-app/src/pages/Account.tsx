@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown, LogIn, Shield, User, CheckCircle2, Check } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { useTranslation } from '../utils/i18n'
 
 function formatIDR(amount: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -10,6 +11,7 @@ function formatIDR(amount: number) {
 export function Account() {
   const navigate = useNavigate()
   const { userName, userEmail, isAuthenticated, hasMonthlyPlan, logoutUser, language, setLanguage } = useStore()
+  const { t } = useTranslation()
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false)
 
   const handleLogout = async () => {
@@ -18,18 +20,18 @@ export function Account() {
   }
 
   const menuItems = [
-    { icon: Bell, label: 'Notifications', action: () => navigate('/notifications') },
-    { icon: MessageSquare, label: 'Live chat', action: () => navigate('/live-chat') },
-    { icon: HelpCircle, label: 'FAQ', action: () => navigate('/faq') },
+    { icon: Bell, label: t('accNotifications'), action: () => navigate('/notifications') },
+    { icon: MessageSquare, label: t('accLiveChat'), action: () => navigate('/live-chat') },
+    { icon: HelpCircle, label: t('accFaq'), action: () => navigate('/faq') },
     {
       icon: Globe,
-      label: 'Language',
+      label: t('accLanguage'),
       value: language === 'id' ? 'Bahasa Indonesia' : 'English',
       action: () => setIsLanguageModalOpen(true),
     },
     ...(isAuthenticated
-      ? [{ icon: LogOut, label: 'Log out', action: handleLogout, danger: true }]
-      : [{ icon: LogIn, label: 'Sign In / Register', action: () => navigate('/auth'), highlight: true }]),
+      ? [{ icon: LogOut, label: t('accLogOut'), action: handleLogout, danger: true }]
+      : [{ icon: LogIn, label: t('accSignInBtn'), action: () => navigate('/auth'), highlight: true }]),
   ]
 
   return (
@@ -45,7 +47,7 @@ export function Account() {
               <div className="flex items-center gap-2">
                 <p className="text-white text-xl font-bold">{userName}</p>
                 <span className="bg-green-600 text-green-100 text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                  <Shield size={10} /> Verified
+                  <Shield size={10} /> {t('accVerified')}
                 </span>
               </div>
               <p className="text-green-200 text-sm mt-0.5">{userEmail}</p>
@@ -56,15 +58,15 @@ export function Account() {
             <div className="w-16 h-16 rounded-full bg-green-800 text-green-200 flex items-center justify-center mx-auto mb-3">
               <User size={30} />
             </div>
-            <h2 className="text-white text-lg font-bold">You are not signed in</h2>
+            <h2 className="text-white text-lg font-bold">{t('accNotSignedIn')}</h2>
             <p className="text-green-200 text-xs mt-1 mb-4">
-              Sign in to manage your bookings and unlock smart lockers
+              {t('accNotSignedInSub')}
             </p>
             <button
               onClick={() => navigate('/auth')}
               className="px-6 py-2.5 bg-white text-green-800 rounded-xl text-xs font-bold shadow-md hover:bg-green-50 transition-all active:scale-95"
             >
-              Sign In / Register
+              {t('accSignInBtn')}
             </button>
           </div>
         )}
@@ -82,13 +84,11 @@ export function Account() {
               <div className="flex items-center gap-2 mb-0.5">
                 <Crown size={18} className={hasMonthlyPlan ? 'text-amber-300' : 'text-gray-400'} />
                 <p className={`text-sm font-bold ${hasMonthlyPlan ? 'text-white' : 'text-gray-800'}`}>
-                  {hasMonthlyPlan ? 'Paket Aktif (Member VIP)' : 'Langganan Member Bulanan'}
+                  {hasMonthlyPlan ? t('accMemberActive') : t('accMemberInactive')}
                 </p>
               </div>
               <p className={`text-xs ${hasMonthlyPlan ? 'text-green-100' : 'text-gray-500'}`}>
-                {hasMonthlyPlan
-                  ? 'Akses loker Size S & M tanpa batas kuota di seluruh hub.'
-                  : 'Sewa loker harian tanpa batas biaya di semua hub.'}
+                {hasMonthlyPlan ? t('accMemberDescActive') : t('accMemberDescInactive')}
               </p>
             </div>
             <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap ${
@@ -96,20 +96,22 @@ export function Account() {
                 ? 'bg-amber-400 text-amber-950 shadow-xs'
                 : 'bg-gray-200 text-gray-600'
             }`}>
-              {hasMonthlyPlan ? 'Member VIP Aktif' : 'Belum Berlangganan'}
+              {hasMonthlyPlan ? t('accMemberBadgeActive') : t('accMemberBadgeInactive')}
             </span>
           </div>
 
           {!hasMonthlyPlan ? (
             <div>
               <p className="text-xs text-gray-500 mb-3">
-                Cukup {formatIDR(125000)}/bulan untuk akses loker S dan M setiap hari bebas biaya jam sewa.
+                {language === 'en'
+                  ? `Only ${formatIDR(125000)}/month for unlimited daily access to Size S and M lockers.`
+                  : `Cukup ${formatIDR(125000)}/bulan untuk akses loker S dan M setiap hari bebas biaya jam sewa.`}
               </p>
               <button
                 onClick={() => navigate('/payment?type=subscription')}
                 className="w-full py-3 bg-green-700 text-white rounded-xl font-bold text-xs hover:bg-green-800 active:scale-95 transition-all shadow-sm"
               >
-                Berlangganan Sekarang — {formatIDR(125000)}/bulan
+                {t('accSubscribeBtn')}
               </button>
             </div>
           ) : (
@@ -117,14 +119,14 @@ export function Account() {
               <div className="flex items-center justify-between text-xs text-green-100">
                 <span className="flex items-center gap-1.5 font-medium">
                   <CheckCircle2 size={14} className="text-amber-300" />
-                  Status Keanggotaan: <strong>Aktif</strong>
+                  Status Keanggotaan: <strong>{t('txActive')}</strong>
                 </span>
                 <span className="text-[11px] bg-black/20 text-green-200 px-2 py-0.5 rounded-md font-mono">
-                  1 Akun / 30 Hari
+                  {t('accOneAccount')}
                 </span>
               </div>
               <p className="text-[11px] text-green-200">
-                Berlaku hingga: <strong>17 Desember 2026</strong>. Anda tidak dapat berlangganan ganda selama paket aktif.
+                {t('accValidUntil', { date: '17 Desember 2026' })}
               </p>
             </div>
           )}

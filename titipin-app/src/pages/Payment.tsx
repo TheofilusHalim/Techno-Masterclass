@@ -51,6 +51,7 @@ export function Payment() {
     setActiveLocker,
     loadActiveBooking,
     addTransaction,
+    addNotification,
     hasMonthlyPlan,
     subscribeMonthly,
     activeBookings,
@@ -147,6 +148,15 @@ export function Payment() {
         type: isCoveredByMonthlyPass ? 'subscription' : 'per-hour',
         method: paymentMethodUsed,
         status: 'success',
+      })
+
+      addNotification({
+        type: 'success',
+        title: isCoveredByMonthlyPass ? 'Sewa Loker Aktif (Member VIP)' : 'Pembayaran Berhasil',
+        message: `Loker ${assignedLockerNumber} di ${selectedHub} aktif untuk ${selectedDuration} jam.`,
+        timeAgo: 'Baru saja',
+        action: '/my-locker',
+        actionLabel: 'Buka Loker',
       })
 
       // 4. Redirect to success screen (<3 clicks journey complete)

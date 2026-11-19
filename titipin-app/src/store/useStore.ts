@@ -21,6 +21,17 @@ export interface Transaction {
   status: 'success' | 'plan'
 }
 
+export interface AppNotification {
+  id: string
+  type: 'success' | 'warning' | 'info' | 'error'
+  title: string
+  message: string
+  timeAgo: string
+  timestamp: number
+  action?: string
+  actionLabel?: string
+}
+
 export type LockerStatus = 'locked' | 'unlocked' | 'idle'
 export type ConnectionStatus = 'connected' | 'connecting' | 'error'
 
@@ -62,7 +73,8 @@ interface AppState {
   // Transactions
   transactions: Transaction[]
 
-  // Notifications badge
+  // Notifications
+  notifications: AppNotification[]
   unreadNotifications: number
 
   // Language preferences
@@ -70,6 +82,8 @@ interface AppState {
   setLanguage: (lang: 'id' | 'en') => void
 
   // Actions
+  addNotification: (notif: Omit<AppNotification, 'id' | 'timestamp'>) => void
+  clearNotifications: () => void
   setActiveLocker: (data: {
     lockerNumber: string
     lockerSize: string
@@ -136,10 +150,36 @@ export const useStore = create<AppState>((set, get) => ({
 
   transactions: [],
 
-  unreadNotifications: 0,
+  notifications: [
+    {
+      id: 'notif-welcome',
+      type: 'info',
+      title: 'Selamat Datang di Titipin!',
+      message: 'Loker pintar digital berbasis IoT pertama di Surabaya. Nikmati kemudahan sewa & buka loker via aplikasi.',
+      timeAgo: 'Baru saja',
+      timestamp: Date.now(),
+      action: '/nearby-lockers',
+      actionLabel: 'Cari Loker',
+    },
+  ],
+  unreadNotifications: 1,
 
   language: 'id',
   setLanguage: (lang) => set({ language: lang }),
+
+  addNotification: (notif) => {
+    const newNotif: AppNotification = {
+      ...notif,
+      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+    }
+    set((s) => ({
+      notifications: [newNotif, ...s.notifications],
+      unreadNotifications: s.unreadNotifications + 1,
+    }))
+  },
+
+  clearNotifications: () => set({ notifications: [], unreadNotifications: 0 }),
 
   setActiveLocker: ({ lockerNumber, lockerSize, lockerLocation, duration, bookingId }) =>
     set({
@@ -239,10 +279,29 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  tickLockerTimer: () =>
-    set((s) => ({
-      remainingSeconds: Math.max(0, s.remainingSeconds - 1),
-    })),
+  tickLockerTimer: () => {
+    const s = get()
+    if (!s.hasActiveLocker || s.remainingSeconds <= 0) return
+
+    const nextSeconds = Math.max(0, s.remainingSeconds - 1)
+
+    // Trigger notification when reaching exactly 10 minutes (600s)
+    if (nextSeconds === 600) {
+      s.addNotification({
+        type: 'warning',
+        title: s.language === 'en' ? 'Warning: Time is Almost Up!' : 'Peringatan: Waktu Hampir Habis!',
+        message:
+          s.language === 'en'
+            ? `Locker ${s.lockerNumber} closes in 10 minutes. Extend now to avoid late fines.`
+            : `Loker ${s.lockerNumber} akan berakhir dalam 10 menit. Perpanjang sekarang agar terhindar dari denda.`,
+        timeAgo: 'Baru saja',
+        action: '/my-locker',
+        actionLabel: s.language === 'en' ? 'Extend now' : 'Perpanjang sekarang',
+      })
+    }
+
+    set({ remainingSeconds: nextSeconds })
+  },
 
   tickQRTimer: () =>
     set((s) => ({
@@ -273,6 +332,18 @@ export const useStore = create<AppState>((set, get) => ({
       status: 'success',
     })
 
+    get().addNotification({
+      type: 'success',
+      title: get().language === 'en' ? 'Rental Extended (+1 Hr)' : 'Perpanjangan Berhasil (+1 Jam)',
+      message:
+        get().language === 'en'
+          ? `Locker ${lockerNumber} extended by 1 hour. Time added successfully.`
+          : `Loker ${lockerNumber} berhasil diperpanjang 1 jam. Waktu sewa ditambahkan.`,
+      timeAgo: 'Baru saja',
+      action: '/my-locker',
+      actionLabel: get().language === 'en' ? 'View Locker' : 'Lihat Loker',
+    })
+
     // 2. Call Supabase extendBooking API
     try {
       const res = await extendBooking(activeBookingId || lockerNumber, 1)
@@ -300,6 +371,18 @@ export const useStore = create<AppState>((set, get) => ({
 
     // Update local store state immediately
     set({ lockerStatus: 'unlocked', isDoorOpen: true, lockerStatusLog: log })
+
+    get().addNotification({
+      type: 'info',
+      title: get().language === 'en' ? 'Locker Door Opened' : 'Pintu Loker Terbuka',
+      message:
+        get().language === 'en'
+          ? `Locker ${lockerNumber} door unlocked via remote app.`
+          : `Pintu Loker ${lockerNumber} berhasil dibuka melalui remote aplikasi.`,
+      timeAgo: 'Baru saja',
+      action: '/my-locker',
+      actionLabel: get().language === 'en' ? 'Check door' : 'Cek pintu',
+    })
 
     // Call Supabase API to update door_command = 'UNLOCK' & record access_method in locker_logs
     triggerDoorUnlockRemote(lockerNumber, accessMethod, activeBookingId).catch((e) => {
@@ -383,6 +466,18 @@ export const useStore = create<AppState>((set, get) => ({
       amount: 125000,
       type: 'subscription',
       status: 'plan',
+    })
+
+    get().addNotification({
+      type: 'success',
+      title: get().language === 'en' ? 'VIP Pass Activated!' : 'Member VIP Aktif!',
+      message:
+        get().language === 'en'
+          ? 'Your 30-Day VIP Pass is now active. Enjoy free rentals on Size S & M lockers!'
+          : 'Paket Member VIP 30 Hari Anda telah aktif. Nikmati sewa gratis loker S & M!',
+      timeAgo: 'Baru saja',
+      action: '/nearby-lockers',
+      actionLabel: get().language === 'en' ? 'Book Locker' : 'Pesan Loker',
     })
 
     try {

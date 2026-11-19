@@ -9,6 +9,7 @@ import { formatTime } from '../utils/time'
 import { fetchHubsWithAvailability, type HubWithStats } from '../lib/lockerService'
 import { supabase } from '../lib/supabase'
 import { LiveMap } from '../components/LiveMap'
+import { useTranslation } from '../utils/i18n'
 
 export function Home() {
   const navigate = useNavigate()
@@ -23,6 +24,8 @@ export function Home() {
     setSelectedHub,
     setConnectionStatus,
   } = useStore()
+
+  const { t, language } = useTranslation()
 
   const [hubs, setHubs] = useState<HubWithStats[]>([])
   const [loading, setLoading] = useState(true)
@@ -108,12 +111,12 @@ export function Home() {
         <div className="flex items-baseline justify-between">
           <div>
             <p className="text-green-200 text-xs font-medium">
-              {isAuthenticated ? `Hi, ${userName} 👋` : 'Welcome to Titipin'}
+              {isAuthenticated ? `Hi, ${userName} 👋` : (language === 'en' ? 'Welcome to Titipin 👋' : 'Selamat datang di Titipin 👋')}
             </p>
-            <h1 className="text-white text-2xl font-bold mt-0.5">Find a locker</h1>
+            <h1 className="text-white text-2xl font-bold mt-0.5">{t('homeFindLocker')}</h1>
           </div>
         </div>
-        <p className="text-green-200 text-xs mt-0.5">Smart IoT storage in Surabaya</p>
+        <p className="text-green-200 text-xs mt-0.5">{t('homeFindLockerSub')}</p>
       </div>
 
       <div className="flex-1 px-4 py-4 space-y-4">
@@ -130,13 +133,13 @@ export function Home() {
               <div className="text-left">
                 <p className="text-xs text-green-600 font-medium">
                   {activeBookings && activeBookings.length > 1
-                    ? `${activeBookings.length} Loker Aktif`
-                    : 'Active locker'}
+                    ? t('homeMultiActiveLocker', { count: activeBookings.length, units: '' }).split('•')[0]
+                    : t('homeActiveLocker')}
                 </p>
                 <p className="text-sm font-semibold text-gray-800">
                   {activeBookings && activeBookings.length > 1
                     ? `Unit: ${activeBookings.map((b) => b.locker?.locker_number).filter(Boolean).join(', ')}`
-                    : `Locker ${lockerNumber} is active • ${formatTime(remainingSeconds)}`}
+                    : t('homeActiveLockerSub', { number: lockerNumber, time: formatTime(remainingSeconds) })}
                 </p>
               </div>
             </div>
@@ -151,7 +154,7 @@ export function Home() {
         <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
           <div className="flex items-start justify-between mb-2">
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Nearest Hub (Realtime)</p>
+              <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">{t('homeNearestHub')}</p>
               <p className="text-base font-semibold text-gray-800 mt-0.5">
                 {nearestHub ? nearestHub.name : 'Petra Christian University'}
               </p>
@@ -164,7 +167,7 @@ export function Home() {
               <Loader2 size={16} className="animate-spin text-green-600 mt-1" />
             ) : (
               <span className="bg-green-100 text-green-700 text-xs font-bold px-2.5 py-1 rounded-full">
-                {nearestHub?.total_available ?? 8} free
+                {nearestHub?.total_available ?? 8} {t('homeFree').toLowerCase()}
               </span>
             )}
           </div>
@@ -191,7 +194,7 @@ export function Home() {
             onClick={handleSelectNearest}
             className="w-full mt-3 py-2 bg-green-50 text-green-700 rounded-xl font-semibold text-xs hover:bg-green-100 transition-colors"
           >
-            Select this hub →
+            {language === 'en' ? 'Select this hub →' : 'Pilih hub ini →'}
           </button>
         </div>
 
@@ -200,7 +203,7 @@ export function Home() {
           onClick={() => navigate('/nearby-lockers')}
           className="w-full py-4 bg-green-700 text-white rounded-2xl font-semibold text-base shadow-lg shadow-green-700/30 hover:bg-green-800 active:scale-95 transition-all"
         >
-          Book a locker
+          {language === 'en' ? 'Book a locker' : 'Pesan Loker Sekarang'}
         </button>
 
         {/* Quick links */}

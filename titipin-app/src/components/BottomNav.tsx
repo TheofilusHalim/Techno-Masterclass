@@ -1,10 +1,12 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { Home, Package, QrCode, Receipt, User } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { useTranslation } from '../utils/i18n'
 
 export function BottomNav() {
   const location = useLocation()
   const unreadNotifications = useStore((s) => s.unreadNotifications)
+  const { t } = useTranslation()
 
   // Hide bottom nav on certain sub-pages and auth screens
   const hideOn = ['/auth', '/login', '/payment', '/success', '/hub-detail', '/notifications', '/faq', '/live-chat', '/chat-support']
@@ -31,8 +33,8 @@ export function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-gray-200 safe-area-inset-bottom z-50">
       <div className="grid grid-cols-5 items-center px-2 pt-2 pb-3 relative">
-        {navItem('/', Home, 'Home', unreadNotifications)}
-        {navItem('/my-locker', Package, 'My Locker')}
+        {navItem('/', Home, t('navHome'), unreadNotifications)}
+        {navItem('/my-locker', Package, t('navLocker'))}
 
         {/* Floating QR FAB */}
         <NavLink
@@ -42,11 +44,11 @@ export function BottomNav() {
           <span className="w-14 h-14 rounded-full bg-green-700 flex items-center justify-center shadow-lg shadow-green-700/40 hover:bg-green-800 transition-colors">
             <QrCode size={26} className="text-white" />
           </span>
-          <span className="text-[10px] text-gray-400 mt-0.5 font-medium">Scan</span>
+          <span className="text-[10px] text-gray-400 mt-0.5 font-medium">{t('navScan')}</span>
         </NavLink>
 
-        {navItem('/transactions', Receipt, 'Transactions')}
-        {navItem('/account', User, 'Account')}
+        {navItem('/transactions', Receipt, t('navTransactions'))}
+        {navItem('/account', User, t('navAccount'))}
       </div>
     </nav>
   )

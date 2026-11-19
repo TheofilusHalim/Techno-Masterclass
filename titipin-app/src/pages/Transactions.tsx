@@ -2,31 +2,33 @@ import { useState } from 'react'
 import { Receipt, CalendarDays, MapPin, CreditCard, ArrowLeft, Clock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
+import { useTranslation } from '../utils/i18n'
 
 function formatIDR(amount: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
 }
 
-function formatDate(dateStr: string) {
+function formatDate(dateStr: string, lang: string = 'id') {
   try {
     const d = new Date(dateStr)
     if (isNaN(d.getTime())) return dateStr
-    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+    return d.toLocaleDateString(lang === 'en' ? 'en-US' : 'id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
   } catch {
     return dateStr
   }
 }
 
-const FILTERS = [
-  { key: 'all', label: 'Semua Transaksi' },
-  { key: 'per-hour', label: 'Sewa Per Jam' },
-  { key: 'subscription', label: 'Langganan' },
-] as const
-
 export function Transactions() {
   const navigate = useNavigate()
   const { transactions } = useStore()
+  const { t, language } = useTranslation()
   const [filter, setFilter] = useState<'all' | 'per-hour' | 'subscription'>('all')
+
+  const FILTERS = [
+    { key: 'all', label: t('txAll') },
+    { key: 'per-hour', label: t('txHourly') },
+    { key: 'subscription', label: t('txSubscription') },
+  ] as const
 
   const filtered = filter === 'all' ? transactions : transactions.filter((t) => t.type === filter)
 
@@ -42,7 +44,7 @@ export function Transactions() {
           >
             <ArrowLeft size={18} />
           </button>
-          <h1 className="text-2xl font-black tracking-tight">Riwayat Transaksi</h1>
+          <h1 className="text-2xl font-black tracking-tight">{t('txTitle')}</h1>
         </div>
 
         {/* Filter Pills */}
@@ -65,8 +67,8 @@ export function Transactions() {
 
       <div className="flex-1 px-4 py-5 overflow-y-auto">
         <div className="flex items-center justify-between mb-3 text-xs text-gray-500">
-          <span>Menampilkan {filtered.length} transaksi</span>
-          <span className="font-semibold text-green-700">Audit Transaksi Aman</span>
+          <span>{t('txShowing', { count: filtered.length })}</span>
+          <span className="font-semibold text-green-700">{t('txAuditSecure')}</span>
         </div>
 
         {filtered.length === 0 ? (
@@ -74,15 +76,15 @@ export function Transactions() {
             <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
               <Receipt size={32} className="text-gray-400" />
             </div>
-            <p className="text-sm font-bold text-gray-700">Belum Ada Transaksi</p>
+            <p className="text-sm font-bold text-gray-700">{t('txNoData')}</p>
             <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
-              Semua transaksi pemesanan dan perpanjangan sewa loker Anda akan tercatat di sini.
+              {t('txNoDataSub')}
             </p>
             <button
               onClick={() => navigate('/nearby-lockers')}
               className="mt-4 px-5 py-2.5 bg-green-700 text-white rounded-xl text-xs font-bold hover:bg-green-800 active:scale-95 transition-all"
             >
-              Pesan Loker Sekarang
+              {t('txBookNow')}
             </button>
           </div>
         ) : (
@@ -129,7 +131,7 @@ export function Transactions() {
                           {/* Date Badge */}
                           <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 text-[10px] font-medium px-2 py-0.5 rounded-md border border-gray-200/60">
                             <CalendarDays size={11} className="text-gray-400" />
-                            {formatDate(tx.date)}
+                            {formatDate(tx.date, language)}
                           </span>
 
                           {/* Duration Badge */}

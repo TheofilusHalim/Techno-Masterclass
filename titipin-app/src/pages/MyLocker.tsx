@@ -5,6 +5,7 @@ import { useStore } from '../store/useStore'
 import { formatTime } from '../utils/time'
 import { fetchFinishedBookings } from '../lib/lockerService'
 import type { Booking } from '../lib/database.types'
+import { useTranslation } from '../utils/i18n'
 
 function formatIDR(amount: number) {
   return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount)
@@ -16,6 +17,7 @@ export function MyLocker() {
   const [extendToast, setExtendToast] = useState<string | null>(null)
   const [finishedBookings, setFinishedBookings] = useState<Booking[]>([])
   const [loadingFinished, setLoadingFinished] = useState(false)
+  const { t, language } = useTranslation()
   const {
     hasActiveLocker,
     activeBookings,
@@ -79,7 +81,7 @@ export function MyLocker() {
     <div className="flex flex-col min-h-full bg-white">
       {/* Header */}
       <div className="bg-green-700 px-4 pt-12 pb-5 text-white">
-        <h1 className="text-2xl font-black mb-4 tracking-tight">Loker Saya</h1>
+        <h1 className="text-2xl font-black mb-4 tracking-tight">{t('lockerTitle')}</h1>
 
         {/* Tabs */}
         <div className="flex gap-2 bg-green-800/80 p-1 rounded-xl max-w-xs border border-green-600/40">
@@ -93,7 +95,7 @@ export function MyLocker() {
                   : 'text-green-200 hover:text-white'
               }`}
             >
-              {tab === 'active' ? 'Loker Aktif' : 'Riwayat Selesai'}
+              {tab === 'active' ? t('lockerActiveTab') : t('lockerFinishedTab')}
             </button>
           ))}
         </div>
@@ -249,7 +251,7 @@ export function MyLocker() {
                   >
                     <div className="flex items-center gap-1">
                       <Unlock size={16} className={isDoorOpen ? 'animate-bounce' : ''} />
-                      <span>{isDoorOpen ? 'Pintu Terbuka' : 'Buka Loker'}</span>
+                      <span>{isDoorOpen ? t('lockerDoorOpened') : t('lockerUnlockDoor')}</span>
                     </div>
                     <span className="text-[9px] text-gray-500 font-medium">
                       {isDoorOpen ? 'Auto-lock 5s' : 'Remote Unlock'}
@@ -269,18 +271,18 @@ export function MyLocker() {
                   </div>
                   <div className="text-left">
                     <p className="text-sm font-extrabold text-gray-900 flex items-center gap-1.5">
-                      Scan Locker QR
+                      {t('lockerScanQrBtn')}
                       <span className="text-[10px] bg-emerald-200 text-emerald-900 font-bold px-1.5 py-0.2 rounded-md">
-                        Kamera
+                        {language === 'en' ? 'Camera' : 'Kamera'}
                       </span>
                     </p>
                     <p className="text-xs text-gray-600 mt-0.5">
-                      Arahkan kamera ke layar LCD loker untuk membuka pintu
+                      {t('lockerScanQrSub')}
                     </p>
                   </div>
                 </div>
                 <span className="text-xs text-emerald-800 font-bold bg-white border border-emerald-300 px-3 py-1.5 rounded-xl shadow-2xs whitespace-nowrap">
-                  Buka Scanner →
+                  {t('lockerOpenScanner')}
                 </span>
               </button>
 
@@ -288,7 +290,7 @@ export function MyLocker() {
               <div className="flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-2xl p-3.5">
                 <ShieldCheck size={20} className="text-green-700 flex-shrink-0 mt-0.5" />
                 <div className="text-xs text-gray-600 leading-relaxed">
-                  <strong className="text-gray-900">Kebijakan Titipin:</strong> Tidak ada denda terlambat jika Anda memperpanjang sebelum pintu dikunci kembali. Tetap fleksibel sesuai jadwal Anda!
+                  {t('lockerPolicy')}
                 </div>
               </div>
             </div>
@@ -297,15 +299,15 @@ export function MyLocker() {
               <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3 text-gray-400">
                 <Package size={32} />
               </div>
-              <p className="text-gray-800 font-bold text-base">Tidak ada loker aktif</p>
+              <p className="text-gray-800 font-bold text-base">{t('lockerNoActive')}</p>
               <p className="text-gray-500 text-xs mt-1 max-w-xs mx-auto">
-                Pesan loker pintar sekarang di stasiun, kampus, atau pusat perbelanjaan terdekat.
+                {t('lockerNoActiveSub')}
               </p>
               <button
                 onClick={() => navigate('/nearby-lockers')}
                 className="mt-5 px-6 py-3 bg-green-700 text-white rounded-2xl text-xs font-bold hover:bg-green-800 active:scale-95 transition-all shadow-md"
               >
-                Cari & Pesan Loker
+                {t('lockerFindAndBook')}
               </button>
             </div>
           )
