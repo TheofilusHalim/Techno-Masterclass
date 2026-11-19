@@ -2,10 +2,7 @@
  * Gemini AI Customer Support Service for Titipin 24/7 Live Chat
  */
 
-const GEMINI_API_KEY =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) ||
-  (typeof process !== 'undefined' && process.env?.VITE_GEMINI_API_KEY) ||
-  ''
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ''
 // Recommended fast & responsive model for chat interactions
 const GEMINI_MODEL = 'gemini-3.5-flash-lite'
 
