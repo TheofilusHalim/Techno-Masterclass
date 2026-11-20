@@ -131,6 +131,7 @@ export function ChatSupport() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
+              aria-label="Kembali"
               className="p-2 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 transition-all"
             >
               <ArrowLeft size={18} className="text-white" />
@@ -179,7 +180,15 @@ export function ChatSupport() {
                       : 'bg-white text-gray-800 border border-gray-200/90 rounded-bl-xs shadow-xs'
                   }`}
                 >
-                  {msg.text}
+                  {msg.text.split(/(\*\*.*?\*\*)/g).map((part, idx) =>
+                    part.startsWith('**') && part.endsWith('**') ? (
+                      <strong key={idx} className="font-bold">
+                        {part.slice(2, -2)}
+                      </strong>
+                    ) : (
+                      part
+                    )
+                  )}
                 </div>
                 <p className={`text-[10px] text-gray-400 mt-1 px-1 ${msg.from === 'user' ? 'text-right' : ''}`}>
                   {msg.time}
@@ -225,6 +234,7 @@ export function ChatSupport() {
           <button
             onClick={sendMessage}
             disabled={!input.trim() || agentTyping}
+            aria-label="Kirim pesan"
             className="w-10 h-10 rounded-full bg-green-700 flex items-center justify-center hover:bg-green-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95 flex-shrink-0 shadow-xs"
           >
             <Send size={16} className="text-white" />

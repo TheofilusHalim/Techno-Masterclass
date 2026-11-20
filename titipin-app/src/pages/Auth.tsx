@@ -78,7 +78,7 @@ export function Auth() {
         const res = await registerUser(fullName, email, password)
         if (res.success) {
           setSuccessMessage(
-            `Registrasi berhasil! Tautan konfirmasi telah dikirim ke ${email}. Silakan buka email Anda, klik konfirmasi, lalu Sign In di tab Masuk.`
+            `Registrasi berhasil! Tautan konfirmasi telah dikirim ke ${email}. Silakan buka email Anda, klik konfirmasi, lalu Sign In di tab Sign In.`
           )
           setMode('signin')
         } else {
@@ -240,7 +240,7 @@ export function Auth() {
         </form>
 
         <p className="text-center text-[11px] text-gray-400 mt-6 leading-relaxed">
-          By signing in, you agree to Titipin Terms of Service and Privacy Policy. Connected to Supabase Auth.
+          {mode === 'signin' ? 'By signing in' : 'By signing up'}, you agree to Titipin Terms of Service and Privacy Policy. Connected to Supabase Auth.
         </p>
       </div>
     </div>

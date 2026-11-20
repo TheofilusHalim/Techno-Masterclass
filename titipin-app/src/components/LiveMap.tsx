@@ -253,7 +253,7 @@ export function LiveMap({ hubs, onSelectHub }: LiveMapProps) {
       <button
         onClick={() => fetchUserLocation()}
         type="button"
-        className="absolute bottom-2 left-2 z-[1000] flex items-center gap-1.5 bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-[10px] font-medium shadow-md transition-all active:scale-95 cursor-pointer hover:bg-white"
+        className="absolute top-3 left-3 z-[1000] flex items-center gap-1.5 bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-[10px] font-medium shadow-md transition-all active:scale-95 cursor-pointer hover:bg-white"
         title="Klik untuk mendeteksi ulang lokasi GPS"
       >
         {locationStatus === 'loading' && <span className="text-gray-600 animate-pulse">📍 Mencari lokasi…</span>}

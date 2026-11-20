@@ -4,6 +4,9 @@ import {
   extendBooking,
   fetchActiveBookings,
   subscribeMonthlyPlan,
+  markBookingOverdue,
+  confirmItemsRetrieved,
+  fetchUserTransactions,
 } from '../lib/lockerService'
 import type { Booking, AccessMethod } from '../lib/database.types'
 import { supabase } from '../lib/supabase'
@@ -52,6 +55,10 @@ interface AppState {
   isDoorOpen: boolean
   lockerStatusLog: string[]
 
+  // Overdue state
+  isOverdue: boolean
+  lateFee: number
+
   // Supabase connection state
   connectionStatus: ConnectionStatus
   connectionError: string | null
@@ -98,6 +105,7 @@ interface AppState {
   tickLockerTimer: () => void
   tickQRTimer: () => void
   extendLocker: () => Promise<void>
+  retrieveItems: (paymentMethod?: string) => Promise<{ success: boolean; lateFee: number; message: string; error: string | null }>
   triggerUnlock: (source: string, accessMethod?: AccessMethod) => Promise<void>
   setDoorOpenFromRealtime: (isOpen: boolean, source?: string) => void
   setSelectedHub: (hub: string, hubId?: string) => void
@@ -105,6 +113,7 @@ interface AppState {
   setSelectedMode: (mode: 'per-hour' | 'subscription') => void
   setSelectedDuration: (dur: number) => void
   addTransaction: (tx: Transaction) => void
+  loadTransactions: (userId?: string) => Promise<void>
   subscribeMonthly: () => Promise<{ success: boolean; message: string; error?: string }>
   refreshUserProfile: (userId?: string) => Promise<void>
   markNotificationsRead: () => void
@@ -115,6 +124,40 @@ interface AppState {
 }
 
 let unlockTimer: ReturnType<typeof setTimeout> | null = null
+
+const TX_STORAGE_KEY = 'titipin_transactions_v1'
+const NOTIF_STORAGE_KEY = 'titipin_notifications_v1'
+const UNREAD_STORAGE_KEY = 'titipin_unread_v1'
+
+const DEFAULT_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: 'notif-welcome',
+    type: 'info',
+    title: 'Selamat Datang di Titipin!',
+    message: 'Loker pintar digital berbasis IoT pertama di Surabaya. Nikmati kemudahan sewa & buka loker via aplikasi.',
+    timeAgo: 'Baru saja',
+    timestamp: Date.now(),
+    action: '/nearby-lockers',
+    actionLabel: 'Cari Loker',
+  },
+]
+
+function loadSavedJSON<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? (JSON.parse(raw) as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function saveJSON(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // ignore storage quota errors
+  }
+}
 
 export const useStore = create<AppState>((set, get) => ({
   hasActiveLocker: false,
@@ -133,6 +176,9 @@ export const useStore = create<AppState>((set, get) => ({
     `[${new Date().toLocaleTimeString()}] Supabase client initialized`,
   ],
 
+  isOverdue: false,
+  lateFee: 0,
+
   connectionStatus: 'connected',
   connectionError: null,
 
@@ -149,24 +195,16 @@ export const useStore = create<AppState>((set, get) => ({
   selectedMode: 'per-hour',
   selectedDuration: 2,
 
-  transactions: [],
+  transactions: loadSavedJSON<Transaction[]>(TX_STORAGE_KEY, []),
 
-  notifications: [
-    {
-      id: 'notif-welcome',
-      type: 'info',
-      title: 'Selamat Datang di Titipin!',
-      message: 'Loker pintar digital berbasis IoT pertama di Surabaya. Nikmati kemudahan sewa & buka loker via aplikasi.',
-      timeAgo: 'Baru saja',
-      timestamp: Date.now(),
-      action: '/nearby-lockers',
-      actionLabel: 'Cari Loker',
-    },
-  ],
-  unreadNotifications: 1,
+  notifications: loadSavedJSON<AppNotification[]>(NOTIF_STORAGE_KEY, DEFAULT_NOTIFICATIONS),
+  unreadNotifications: loadSavedJSON<number>(UNREAD_STORAGE_KEY, 1),
 
-  language: 'id',
-  setLanguage: (lang) => set({ language: lang }),
+  language: loadSavedJSON<'id' | 'en'>('titipin_language_v1', 'id'),
+  setLanguage: (lang) => {
+    saveJSON('titipin_language_v1', lang)
+    set({ language: lang })
+  },
 
   addNotification: (notif) => {
     const newNotif: AppNotification = {
@@ -174,10 +212,16 @@ export const useStore = create<AppState>((set, get) => ({
       id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       timestamp: Date.now(),
     }
-    set((s) => ({
-      notifications: [newNotif, ...s.notifications],
-      unreadNotifications: s.unreadNotifications + 1,
-    }))
+    set((s) => {
+      const nextNotifs = [newNotif, ...s.notifications].slice(0, 50)
+      const nextUnread = s.unreadNotifications + 1
+      saveJSON(NOTIF_STORAGE_KEY, nextNotifs)
+      saveJSON(UNREAD_STORAGE_KEY, nextUnread)
+      return {
+        notifications: nextNotifs,
+        unreadNotifications: nextUnread,
+      }
+    })
     // Trigger native Android system notification banner + sound
     sendSystemNotification({
       title: notif.title,
@@ -185,7 +229,11 @@ export const useStore = create<AppState>((set, get) => ({
     }).catch((err) => console.warn('System notification error:', err))
   },
 
-  clearNotifications: () => set({ notifications: [], unreadNotifications: 0 }),
+  clearNotifications: () => {
+    saveJSON(NOTIF_STORAGE_KEY, [])
+    saveJSON(UNREAD_STORAGE_KEY, 0)
+    set({ notifications: [], unreadNotifications: 0 })
+  },
 
   setActiveLocker: ({ lockerNumber, lockerSize, lockerLocation, duration, bookingId }) =>
     set({
@@ -223,6 +271,7 @@ export const useStore = create<AppState>((set, get) => ({
       const cur = bookings[index]
       const expiresAt = new Date(cur.expires_at).getTime()
       const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
+      const isOverdue = cur.status === 'overdue' || (remaining === 0 && cur.status !== 'finished')
       set({
         selectedActiveBookingIndex: index,
         activeBooking: cur,
@@ -231,6 +280,7 @@ export const useStore = create<AppState>((set, get) => ({
         lockerSize: (cur.locker?.size as any) || 'M',
         lockerLocation: cur.hub?.name || 'Petra Christian University',
         remainingSeconds: remaining,
+        isOverdue,
       })
     }
   },
@@ -246,6 +296,7 @@ export const useStore = create<AppState>((set, get) => ({
           activeBookingId: null,
           lockerNumber: '',
           remainingSeconds: 0,
+          isOverdue: false,
         })
         return
       }
@@ -257,6 +308,11 @@ export const useStore = create<AppState>((set, get) => ({
         const expiresAt = new Date(cur.expires_at).getTime()
         const now = Date.now()
         const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000))
+        const isOverdue = cur.status === 'overdue' || (remaining === 0 && cur.status !== 'finished')
+
+        if (isOverdue && cur.status !== 'overdue') {
+          markBookingOverdue(cur.id, cur.locker?.locker_number || '').catch(console.warn)
+        }
 
         set({
           activeBookings: bookings,
@@ -268,6 +324,7 @@ export const useStore = create<AppState>((set, get) => ({
           lockerLocation: cur.hub?.name || 'Petra Christian University',
           remainingSeconds: remaining,
           selectedActiveBookingIndex: selectedIdx,
+          isOverdue,
         })
       } else {
         set({
@@ -278,6 +335,7 @@ export const useStore = create<AppState>((set, get) => ({
           lockerNumber: '',
           remainingSeconds: 0,
           selectedActiveBookingIndex: 0,
+          isOverdue: false,
         })
       }
     } catch (err) {
@@ -306,6 +364,28 @@ export const useStore = create<AppState>((set, get) => ({
       })
     }
 
+    // Ketika timer mencapai 0 → ubah ke status overdue (barang masih di dalam)
+    if (nextSeconds === 0 && !s.isOverdue) {
+      set({ remainingSeconds: 0, isOverdue: true })
+
+      // Panggil Supabase: tandai booking dan loker sebagai overdue (bukan available!)
+      markBookingOverdue(s.activeBookingId, s.lockerNumber).catch(console.warn)
+
+      // Kirim notifikasi: segera ambil barang
+      get().addNotification({
+        type: 'error',
+        title: s.language === 'en' ? 'Rental Time Expired!' : 'Waktu Sewa Habis!',
+        message:
+          s.language === 'en'
+            ? `Locker ${s.lockerNumber}: Please retrieve your items immediately. Late fee is now being applied.`
+            : `Loker ${s.lockerNumber}: Segera ambil barang Anda. Denda keterlambatan mulai berjalan.`,
+        timeAgo: 'Baru saja',
+        action: '/my-locker',
+        actionLabel: s.language === 'en' ? 'Retrieve Items' : 'Ambil Barang',
+      })
+      return
+    }
+
     set({ remainingSeconds: nextSeconds })
   },
 
@@ -320,6 +400,7 @@ export const useStore = create<AppState>((set, get) => ({
     // 1. Optimistically update local timer and transaction for instant UX feedback
     set((s) => ({
       remainingSeconds: s.remainingSeconds + 3600,
+      isOverdue: false, // Reset overdue saat perpanjang
       lockerStatusLog: [
         `[${new Date().toLocaleTimeString()}] Extend +1 hr requested (Supabase: extendBooking)`,
         ...s.lockerStatusLog,
@@ -356,11 +437,65 @@ export const useStore = create<AppState>((set, get) => ({
       if (res.success && res.newExpiresAt) {
         const remaining = Math.max(0, Math.floor((new Date(res.newExpiresAt).getTime() - Date.now()) / 1000))
         if (remaining > 0) {
-          set({ remainingSeconds: remaining })
+          set((s) => ({
+            remainingSeconds: remaining,
+            isOverdue: false,
+            activeBookings: s.activeBookings.map((b) =>
+              b.id === activeBookingId ? { ...b, expires_at: res.newExpiresAt!, status: 'extended' } : b
+            ),
+          }))
         }
       }
     } catch (err) {
       console.warn('extendBooking API error:', err)
+    }
+  },
+
+  retrieveItems: async (paymentMethod = 'QRIS') => {
+    const { lockerNumber, lockerSize, lockerLocation, activeBookingId, userId, language, addTransaction } = get()
+    try {
+      const result = await confirmItemsRetrieved(activeBookingId, lockerNumber)
+      if (result.success) {
+        if (result.lateFee > 0) {
+          addTransaction({
+            id: `tx-fine-${Date.now()}`,
+            date: new Date().toISOString().split('T')[0],
+            location: `${lockerLocation} (Denda Overdue)`,
+            lockerSize,
+            lockerNumber,
+            amount: result.lateFee,
+            type: 'per-hour',
+            method: paymentMethod,
+            status: 'success',
+          })
+        }
+
+        // Reset index ke 0 dan muat ulang sisa loker aktif dari Supabase
+        set({
+          selectedActiveBookingIndex: 0,
+          lateFee: result.lateFee,
+          lockerStatus: 'idle',
+        })
+        await get().loadActiveBooking(userId || undefined)
+
+        get().addNotification({
+          type: 'success',
+          title: language === 'en' ? 'Items Retrieved' : 'Barang Berhasil Diambil',
+          message:
+            result.lateFee > 0
+              ? language === 'en'
+                ? `Late fee Rp ${result.lateFee.toLocaleString('id-ID')} paid. Locker ${lockerNumber} unlocked & released.`
+                : `Denda Rp ${result.lateFee.toLocaleString('id-ID')} lunas. Loker ${lockerNumber} terbuka & kembali tersedia.`
+              : language === 'en'
+              ? `Locker ${lockerNumber} unlocked & released successfully.`
+              : `Loker ${lockerNumber} terbuka & kembali tersedia.`,
+          timeAgo: 'Baru saja',
+        })
+      }
+      return result
+    } catch (err) {
+      console.warn('retrieveItems error:', err)
+      return { success: false, lateFee: 0, message: '', error: String(err) }
     }
   },
 
@@ -445,7 +580,25 @@ export const useStore = create<AppState>((set, get) => ({
   setSelectedDuration: (dur) => set({ selectedDuration: dur }),
 
   addTransaction: (tx) =>
-    set((s) => ({ transactions: [tx, ...s.transactions] })),
+    set((s) => {
+      const nextTx = [tx, ...s.transactions].slice(0, 100)
+      saveJSON(TX_STORAGE_KEY, nextTx)
+      return { transactions: nextTx }
+    }),
+
+  loadTransactions: async (userId?: string) => {
+    try {
+      const uid = userId || get().userId
+      if (!uid) return
+      const { data } = await fetchUserTransactions(uid)
+      if (data && data.length > 0) {
+        saveJSON(TX_STORAGE_KEY, data)
+        set({ transactions: data })
+      }
+    } catch (err) {
+      console.warn('loadTransactions error:', err)
+    }
+  },
 
   subscribeMonthly: async () => {
     const { hasMonthlyPlan, userId, addTransaction } = get()
@@ -520,6 +673,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   markNotificationsRead: () => {
     if (get().unreadNotifications !== 0) {
+      saveJSON(UNREAD_STORAGE_KEY, 0)
       set({ unreadNotifications: 0 })
     }
   },
@@ -618,6 +772,13 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       console.warn('Signout warning:', err)
     }
+    try {
+      localStorage.removeItem(TX_STORAGE_KEY)
+      localStorage.removeItem(NOTIF_STORAGE_KEY)
+      localStorage.removeItem(UNREAD_STORAGE_KEY)
+    } catch {
+      // ignore
+    }
     set({
       userName: '',
       userEmail: '',
@@ -629,6 +790,8 @@ export const useStore = create<AppState>((set, get) => ({
       hasMonthlyPlan: false,
       planExpiresAt: null,
       transactions: [],
+      notifications: DEFAULT_NOTIFICATIONS,
+      unreadNotifications: 1,
     })
   },
 }))

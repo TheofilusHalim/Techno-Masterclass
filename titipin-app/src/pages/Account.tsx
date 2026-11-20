@@ -150,14 +150,14 @@ export function Account() {
               <div className="flex items-center justify-between text-xs text-green-100">
                 <span className="flex items-center gap-1.5 font-medium">
                   <CheckCircle2 size={14} className="text-amber-300" />
-                  Status Keanggotaan: <strong>{t('txActive')}</strong>
+                  {language === 'en' ? 'Membership Status:' : 'Status Keanggotaan:'} <strong>{t('txActive')}</strong>
                 </span>
                 <span className="text-[11px] bg-black/20 text-green-200 px-2 py-0.5 rounded-md font-mono">
                   {t('accOneAccount')}
                 </span>
               </div>
               <p className="text-[11px] text-green-200">
-                {t('accValidUntil', { date: '17 Desember 2026' })}
+                {t('accValidUntil', { date: language === 'en' ? '17 December 2026' : '17 Desember 2026' })}
               </p>
             </div>
           )}
@@ -189,7 +189,7 @@ export function Account() {
           ))}
         </div>
 
-        <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.0 • Connected to Supabase Auth</p>
+        <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.6 • Connected to Supabase Auth</p>
       </div>
 
       {/* Language Selection Dialog / Popup */}

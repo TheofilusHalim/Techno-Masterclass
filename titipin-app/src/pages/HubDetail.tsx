@@ -36,7 +36,7 @@ const SIZE_OPTIONS: SizeOption[] = [
   {
     key: 'L',
     subtitle: 'Carrier 60-80L / Koper 28-32"',
-    desc: 'Muat carrier ransel gunung 60-80L atau koper bagasi besar. Pas untuk Melina & Traveller!',
+    desc: 'Muat carrier ransel gunung 60-80L atau koper bagasi besar. Pas untuk koper besar & perjalanan jauh!',
     rate: 5000,
     emoji: '🧳',
     dimensions: '60 × 75 × 65 cm',

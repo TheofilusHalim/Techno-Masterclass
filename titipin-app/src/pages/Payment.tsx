@@ -247,7 +247,7 @@ export function Payment() {
             ) : (
               [
                 { icon: MapPin, label: 'Lokasi Hub', value: selectedHub },
-                { icon: Package, label: 'Ukuran Loker', value: `Size ${selectedSize} (${sizeInfo.label})` },
+                { icon: Package, label: 'Ukuran Loker', value: `Size ${selectedSize} — ${sizeInfo.label}` },
                 {
                   icon: Clock,
                   label: 'Durasi Sewa',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { useStore } from '../store/useStore'
@@ -13,6 +13,12 @@ export function AppShell() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [availableUpdate, setAvailableUpdate] = useState<AppVersionInfo | null>(null)
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
+  const mainRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    mainRef.current?.scrollTo(0, 0)
+    window.scrollTo(0, 0)
+  }, [location.pathname])
 
   useEffect(() => {
     // Request native Android notification permission & initialize channel
@@ -107,7 +113,7 @@ export function AppShell() {
       {/* Mobile viewport */}
       <div className="relative w-full max-w-md bg-white min-h-screen flex flex-col shadow-xl">
         {/* Page content */}
-        <main className={`flex-1 flex flex-col ${isFullScreenPage ? 'overflow-hidden h-screen max-h-screen' : 'overflow-y-auto pb-20'}`}>
+        <main ref={mainRef} className={`flex-1 flex flex-col ${isFullScreenPage ? 'overflow-hidden h-screen max-h-screen' : 'overflow-y-auto pb-20'}`}>
           <Outlet />
         </main>
         <BottomNav />

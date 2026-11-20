@@ -551,6 +551,147 @@ export async function recordLockerLog({
 }
 
 /**
+ * Marks a booking and its locker as 'overdue' when the rental timer expires.
+ * Does NOT release the locker — items may still be inside.
+ * User must confirm retrieval via confirmItemsRetrieved() before locker is freed.
+ */
+export async function markBookingOverdue(
+  bookingId: string | null,
+  lockerNumber: string
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    if (bookingId && isValidUUID(bookingId)) {
+      const { error: bErr } = await supabase
+        .from('bookings')
+        .update({ status: 'overdue', updated_at: new Date().toISOString() })
+        .eq('id', bookingId)
+      if (bErr) console.warn('markBookingOverdue booking update error:', bErr.message)
+
+      const { error: lErr } = await supabase
+        .from('lockers')
+        .update({ status: 'overdue', updated_at: new Date().toISOString() })
+        .eq('current_booking_id', bookingId)
+      if (lErr) console.warn('markBookingOverdue locker update error:', lErr.message)
+    } else {
+      const { error: lErr } = await supabase
+        .from('lockers')
+        .update({ status: 'overdue', updated_at: new Date().toISOString() })
+        .eq('locker_number', lockerNumber)
+      if (lErr) console.warn('markBookingOverdue locker update error:', lErr.message)
+    }
+
+    await recordLockerLog({
+      lockerNumber,
+      bookingId,
+      accessMethod: 'SYSTEM',
+      action: 'BOOKING_OVERDUE',
+    })
+
+    return { success: true, error: null }
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/**
+ * Called when user confirms items have been retrieved from an overdue locker.
+ * Triggers door unlock, calculates late fee via Supabase RPC, and resets locker to 'available'.
+ */
+export async function confirmItemsRetrieved(
+  bookingId: string | null,
+  lockerNumber: string,
+  accessMethod: AccessMethod = 'REMOTE_APP'
+): Promise<{
+  success: boolean
+  lateFee: number
+  message: string
+  error: string | null
+}> {
+  try {
+    let lateFee = 0
+
+    if (bookingId && isValidUUID(bookingId)) {
+      const { data, error: rpcErr } = await supabase
+        .rpc('complete_overdue_booking', { p_booking_id: bookingId })
+
+      if (rpcErr) {
+        console.warn('complete_overdue_booking RPC error, falling back:', rpcErr.message)
+        // Hitung denda secara lokal jika RPC belum terpasang di Supabase
+        const { data: bookingRow } = await supabase
+          .from('bookings')
+          .select('expires_at')
+          .eq('id', bookingId)
+          .maybeSingle()
+
+        if (bookingRow?.expires_at) {
+          const overdueMin = Math.max(0, Math.floor((Date.now() - new Date(bookingRow.expires_at).getTime()) / 60000))
+          if (overdueMin > 0) {
+            lateFee = overdueMin <= 30 ? 2000 : 2000 + Math.ceil((overdueMin - 30) / 30) * 1000
+          }
+        }
+
+        const { error: bUpdErr } = await supabase
+          .from('bookings')
+          .update({
+            status: 'finished',
+            finished_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', bookingId)
+        if (bUpdErr) console.warn('confirmItemsRetrieved booking fallback error:', bUpdErr.message)
+
+        await supabase
+          .from('lockers')
+          .update({
+            status: 'available',
+            is_occupied: false,
+            current_booking_id: null,
+            is_door_open: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('current_booking_id', bookingId)
+      } else {
+        lateFee = data?.late_fee ?? 0
+      }
+    } else {
+      await supabase
+        .from('lockers')
+        .update({
+          status: 'available',
+          is_occupied: false,
+          current_booking_id: null,
+          is_door_open: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('locker_number', lockerNumber)
+    }
+
+    // Unlock pintu selama 5 detik lalu auto-relock ke status 'available'
+    await triggerDoorUnlockRemote(lockerNumber, accessMethod, bookingId, 'available')
+
+    await recordLockerLog({
+      lockerNumber,
+      bookingId,
+      accessMethod,
+      action: 'ITEMS_RETRIEVED',
+    })
+
+    return {
+      success: true,
+      lateFee,
+      message:
+        lateFee > 0
+          ? `Barang berhasil diambil. Denda keterlambatan: Rp ${lateFee.toLocaleString('id-ID')}`
+          : 'Barang berhasil diambil. Loker kembali tersedia.',
+      error: null,
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { success: false, lateFee: 0, message: '', error: msg }
+  }
+}
+
+/**
  * Extends an active booking by adding `additionalHours` (default 1 hr) to `expires_at`,
  * records `EXTENDED_1HR` action in `locker_logs`, and logs transaction.
  */
@@ -711,7 +852,7 @@ export async function fetchActiveBookings(
         locker:lockers!bookings_locker_id_fkey(*),
         hub:hubs(*)
       `)
-      .in('status', ['active', 'extended'])
+      .in('status', ['active', 'extended', 'overdue'])
       .eq('user_id', effectiveUserId)
       .order('created_at', { ascending: false })
 
@@ -794,7 +935,8 @@ export async function fetchActiveBooking(
 export async function triggerDoorUnlockRemote(
   lockerNumber: string = 'M-07',
   accessMethod: AccessMethod = 'REMOTE_APP',
-  bookingId?: string | null
+  bookingId?: string | null,
+  relockStatus: 'occupied' | 'available' = 'occupied'
 ): Promise<{ success: boolean; message: string }> {
   try {
     // 1. Resolve locker ID & current booking ID
@@ -849,7 +991,7 @@ export async function triggerDoorUnlockRemote(
     // 4. Set timer to auto-relock in 5 seconds (simulates ESP32-S3 auto-relock)
     setTimeout(async () => {
       const closePayload: Record<string, any> = {
-        status: 'occupied',
+        status: relockStatus,
         door_command: 'LOCKED',
         is_door_open: false,
         updated_at: new Date().toISOString(),
@@ -863,7 +1005,7 @@ export async function triggerDoorUnlockRemote(
       if (closeErr && (closeErr.message.includes('door_command') || closeErr.message.includes('is_door_open'))) {
         await supabase
           .from('lockers')
-          .update({ status: 'occupied', updated_at: new Date().toISOString() })
+          .update({ status: relockStatus, updated_at: new Date().toISOString() })
           .eq('locker_number', lockerNumber)
       }
     }, 5000)
@@ -881,8 +1023,9 @@ export async function triggerDoorUnlockRemote(
  */
 export async function validateAndUnlockByQR(
   scannedPayload: string,
-  expectedLockerNumber: string = 'M-07'
-): Promise<{ success: boolean; lockerNumber: string; message: string }> {
+  expectedLockerNumber: string = 'M-07',
+  userId?: string
+): Promise<{ success: boolean; lockerNumber: string; message: string; bookingId?: string }> {
   try {
     const trimmed = scannedPayload.trim()
 
@@ -901,8 +1044,30 @@ export async function validateAndUnlockByQR(
       extractedLocker = trimmed
     }
 
-    // Verify match with user's active session
-    if (expectedLockerNumber && extractedLocker.toUpperCase() !== expectedLockerNumber.toUpperCase()) {
+    const targetLocker = extractedLocker.toUpperCase()
+    let matchedBookingId: string | undefined
+
+    // Cocokkan dengan semua sesi sewa aktif/overdue milik akun user di Supabase
+    if (userId && isValidUUID(userId)) {
+      const { data: userBookings } = await fetchActiveBookings(userId)
+      const matched = userBookings.find(
+        (b) => b.locker?.locker_number?.toUpperCase() === targetLocker
+      )
+      if (!matched) {
+        const ownedList = userBookings
+          .map((b) => b.locker?.locker_number)
+          .filter(Boolean)
+          .join(', ')
+        return {
+          success: false,
+          lockerNumber: extractedLocker,
+          message: ownedList
+            ? `Loker ${extractedLocker} tidak terdaftar pada akun Anda. Loker aktif Anda: ${ownedList}.`
+            : `Akun Anda tidak memiliki sesi sewa aktif untuk Loker ${extractedLocker}.`,
+        }
+      }
+      matchedBookingId = matched.id
+    } else if (expectedLockerNumber && targetLocker !== expectedLockerNumber.toUpperCase()) {
       return {
         success: false,
         lockerNumber: extractedLocker,
@@ -910,18 +1075,123 @@ export async function validateAndUnlockByQR(
       }
     }
 
-    // Trigger unlock with QR_SCAN access method
-    const unlockResult = await triggerDoorUnlockRemote(expectedLockerNumber, 'QR_SCAN')
+    // Cek status loker saat ini — izinkan akses jika 'occupied' ATAU 'overdue'
+    const { data: lockerData } = await supabase
+      .from('lockers')
+      .select('status, current_booking_id')
+      .eq('locker_number', extractedLocker)
+      .limit(1)
+      .maybeSingle()
+
+    const lockerStatus = lockerData?.status
+    const isOverdue = lockerStatus === 'overdue'
+    const bookingId = matchedBookingId || lockerData?.current_booking_id || undefined
+
+    if (isOverdue) {
+      const res = await confirmItemsRetrieved(bookingId || null, extractedLocker, 'QR_SCAN')
+      return {
+        success: res.success,
+        lockerNumber: extractedLocker,
+        bookingId,
+        message: res.success
+          ? `Loker ${extractedLocker} dibuka. Ambil barang Anda dan tutup pintu loker.`
+          : res.error || 'Gagal memproses pengambilan barang.',
+      }
+    }
+
+    // Trigger unlock dengan QR_SCAN method (masih dalam masa sewa aktif)
+    const unlockResult = await triggerDoorUnlockRemote(extractedLocker, 'QR_SCAN', bookingId)
 
     return {
-      success: unlockResult.success,
-      lockerNumber: expectedLockerNumber,
+      success: true,
       message: unlockResult.success
-        ? `Verification successful! Locker ${expectedLockerNumber} door unlocked.`
+        ? `Verification successful! Locker ${extractedLocker} door unlocked.`
         : unlockResult.message,
+      lockerNumber: extractedLocker,
+      bookingId,
     }
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     return { success: false, lockerNumber: expectedLockerNumber, message: msg }
+  }
+}
+
+/**
+ * Fetches all transaction history rows for a user from Supabase `transactions` table.
+ */
+export async function fetchUserTransactions(userId?: string): Promise<{
+  data: Array<{
+    id: string
+    date: string
+    location: string
+    lockerSize: string
+    lockerNumber: string
+    duration?: number
+    amount: number
+    type: 'per-hour' | 'subscription'
+    method?: string
+    status: 'success' | 'plan'
+  }>
+  error: string | null
+}> {
+  try {
+    let effectiveUserId = userId
+    if (!effectiveUserId || !isValidUUID(effectiveUserId)) {
+      const { data: authData } = await supabase.auth.getUser()
+      if (authData?.user?.id && isValidUUID(authData.user.id)) {
+        effectiveUserId = authData.user.id
+      }
+    }
+
+    if (!effectiveUserId || !isValidUUID(effectiveUserId)) {
+      return { data: [], error: null }
+    }
+
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*, hub:hubs(name)')
+      .eq('user_id', effectiveUserId)
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    if (error) {
+      return { data: [], error: error.message }
+    }
+
+    const mapped = (data || []).map((row: any) => {
+      const desc: string = row.description || ''
+      const isMonthlyPass = desc.includes('Monthly Pass') || (row.type === 'subscription' && row.amount >= 100000)
+      const lockerMatch = desc.match(/\b([SML]-\d+)\b/i)
+      const lockerNumber = isMonthlyPass ? 'Member Pass' : lockerMatch ? lockerMatch[1].toUpperCase() : 'Loker'
+      const lockerSize = isMonthlyPass ? 'S/M' : lockerNumber[0] === 'S' || lockerNumber[0] === 'M' || lockerNumber[0] === 'L' ? lockerNumber[0] : 'M'
+      const durMatch = desc.match(/(\d+)\s*hr/i)
+      const duration = durMatch ? Number(durMatch[1]) : undefined
+      const hubName = row.hub?.name || (isMonthlyPass ? 'All Hubs (Member VIP)' : 'Titipin Hub')
+      const methodLabel =
+        row.method === 'qris'
+          ? 'QRIS'
+          : row.method === 'ewallet'
+          ? 'E-Wallet'
+          : row.method === 'virtual_account'
+          ? 'Virtual Account'
+          : row.method || 'QRIS'
+
+      return {
+        id: row.id,
+        date: row.created_at ? String(row.created_at).split('T')[0] : new Date().toISOString().split('T')[0],
+        location: hubName,
+        lockerSize,
+        lockerNumber,
+        duration,
+        amount: Number(row.amount || 0),
+        type: (row.type === 'subscription' ? 'subscription' : 'per-hour') as 'per-hour' | 'subscription',
+        method: methodLabel,
+        status: (isMonthlyPass ? 'plan' : 'success') as 'success' | 'plan',
+      }
+    })
+
+    return { data: mapped, error: null }
+  } catch (err: unknown) {
+    return { data: [], error: err instanceof Error ? err.message : String(err) }
   }
 }

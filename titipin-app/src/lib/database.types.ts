@@ -1,7 +1,7 @@
 // ─── Enum mirrors ────────────────────────────────────────────
 export type LockerSize     = 'S' | 'M' | 'L'
-export type LockerStatus   = 'available' | 'occupied' | 'unlocked' | 'maintenance'
-export type BookingStatus  = 'active' | 'extended' | 'finished' | 'cancelled'
+export type LockerStatus   = 'available' | 'occupied' | 'unlocked' | 'maintenance' | 'overdue'
+export type BookingStatus  = 'active' | 'extended' | 'overdue' | 'finished' | 'cancelled'
 export type PaymentType    = 'per_hour' | 'subscription'
 export type PaymentMethod  = 'qris' | 'ewallet' | 'virtual_account'
 export type HubCategory    = 'campus' | 'station' | 'mall' | 'other'
@@ -53,8 +53,8 @@ export interface Locker {
   updated_at: string
 }
 
-export type AccessMethod = 'QR_SCAN' | 'REMOTE_APP' | 'RFID_TAP' | 'CS_OVERRIDE'
-export type LockerAction = 'DOOR_UNLOCKED' | 'EXTENDED_1HR'
+export type AccessMethod = 'QR_SCAN' | 'REMOTE_APP' | 'RFID_TAP' | 'CS_OVERRIDE' | 'SYSTEM'
+export type LockerAction = 'DOOR_UNLOCKED' | 'EXTENDED_1HR' | 'BOOKING_OVERDUE' | 'ITEMS_RETRIEVED'
 
 export interface LockerLog {
   id: string
@@ -75,6 +75,8 @@ export interface Booking {
   started_at: string
   expires_at: string
   finished_at: string | null
+  actual_checkout_at?: string | null
+  late_fee?: number
   hours_booked: number
   amount_paid: number
   payment_method: PaymentMethod

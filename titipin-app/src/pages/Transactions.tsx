@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Receipt, CalendarDays, MapPin, CreditCard, ArrowLeft, Clock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore'
@@ -20,9 +20,13 @@ function formatDate(dateStr: string, lang: string = 'id') {
 
 export function Transactions() {
   const navigate = useNavigate()
-  const { transactions } = useStore()
+  const { transactions, loadTransactions, userId } = useStore()
   const { t, language } = useTranslation()
   const [filter, setFilter] = useState<'all' | 'per-hour' | 'subscription'>('all')
+
+  useEffect(() => {
+    loadTransactions(userId || undefined)
+  }, [loadTransactions, userId])
 
   const FILTERS = [
     { key: 'all', label: t('txAll') },
@@ -109,7 +113,11 @@ export function Transactions() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-0.5">
                           <p className="text-sm font-extrabold text-gray-900">
-                            {isSubscription ? 'Paket Langganan 30 Hari' : `Loker ${tx.lockerNumber}`}
+                            {tx.lockerNumber === 'Member Pass' || tx.status === 'plan'
+                              ? 'Paket Langganan 30 Hari'
+                              : isSubscription
+                              ? `Loker ${tx.lockerNumber} (Member Pass)`
+                              : `Loker ${tx.lockerNumber}`}
                           </p>
                           <span
                             className={`text-[10px] font-bold px-2 py-0.2 rounded-md ${

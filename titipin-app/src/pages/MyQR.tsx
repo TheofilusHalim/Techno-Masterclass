@@ -9,6 +9,11 @@ import { formatTime } from '../utils/time'
 export function MyQR() {
   const navigate = useNavigate()
   const {
+    activeBookings,
+    selectedActiveBookingIndex,
+    selectActiveBooking,
+    loadActiveBooking,
+    userId,
     lockerNumber,
     lockerSize,
     lockerLocation,
@@ -19,19 +24,26 @@ export function MyQR() {
   } = useStore()
 
   const [scanResult, setScanResult] = useState<string | null>(null)
+  const [scannedLockerNum, setScannedLockerNum] = useState<string | null>(null)
   const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [cameraPermissionGranted, setCameraPermissionGranted] = useState<boolean | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [, setNowTick] = useState(() => Date.now())
 
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const scannerContainerId = 'qr-reader-container'
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Countdown timer for active locker
+  useEffect(() => {
+    loadActiveBooking(userId || undefined)
+  }, [loadActiveBooking, userId])
+
+  // Countdown timer for active lockers
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       tickLockerTimer()
+      setNowTick(Date.now())
     }, 1000)
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
@@ -129,13 +141,19 @@ export function MyQR() {
     // Stop scanner temporarily on match
     await stopScanner()
 
-    // Validate payload against active booking (TITIPIN:UK_PETRA:M-07)
-    const result = await validateAndUnlockByQR(payload, lockerNumber)
+    // Validate payload against ALL active/overdue bookings of this user in Supabase
+    const result = await validateAndUnlockByQR(payload, lockerNumber, userId || undefined)
 
     if (result.success) {
+      setScannedLockerNum(result.lockerNumber)
       setScanStatus('success')
-      // Also update local store
+      // Match selected booking in store if present so local UI reflects unlock
+      const idx = activeBookings.findIndex(
+        (b) => b.locker?.locker_number?.toUpperCase() === result.lockerNumber.toUpperCase()
+      )
+      if (idx >= 0) selectActiveBooking(idx)
       triggerUnlock(`QR Scanner (${payload})`, 'QR_SCAN')
+      loadActiveBooking(userId || undefined)
     } else {
       setScanStatus('error')
       setErrorMessage(result.message)
@@ -225,7 +243,7 @@ export function MyQR() {
               <div className="w-16 h-16 rounded-full bg-white text-green-700 flex items-center justify-center shadow-lg mb-3 animate-bounce">
                 <CheckCircle2 size={36} />
               </div>
-              <h3 className="text-lg font-bold">Loker {lockerNumber} Terverifikasi!</h3>
+              <h3 className="text-lg font-bold">Loker {scannedLockerNum || lockerNumber} Terverifikasi!</h3>
               {scanResult && (
                 <p className="text-[10px] bg-green-800/80 text-green-200 px-2 py-0.5 rounded-full font-mono mt-1">
                   Payload: {scanResult}
@@ -251,8 +269,25 @@ export function MyQR() {
             </div>
           )}
 
+          {/* Scan Error Overlay (Account mismatch) */}
+          {scanStatus === 'error' && (
+            <div className="absolute inset-0 bg-rose-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-white text-center">
+              <AlertCircle size={36} className="text-rose-400 mb-2" />
+              <p className="text-sm font-bold">QR Tidak Cocok dengan Akun</p>
+              <p className="text-xs text-rose-200 mt-1 max-w-[260px] leading-relaxed">
+                {errorMessage || 'Loker ini tidak terdaftar pada sesi sewa aktif akun Anda.'}
+              </p>
+              <button
+                onClick={handleResetScan}
+                className="mt-4 px-4 py-2 bg-white text-rose-900 rounded-xl text-xs font-bold shadow-md hover:bg-rose-50 transition-all"
+              >
+                <RefreshCw size={13} className="inline mr-1" /> Scan Ulang
+              </button>
+            </div>
+          )}
+
           {/* Error / Permission Denied Overlay */}
-          {cameraPermissionGranted === false && scanStatus !== 'success' && (
+          {cameraPermissionGranted === false && scanStatus !== 'success' && scanStatus !== 'error' && (
             <div className="absolute inset-0 bg-gray-900/95 flex flex-col items-center justify-center p-6 text-white text-center">
               <AlertCircle size={36} className="text-amber-400 mb-2" />
               <p className="text-sm font-semibold">Kamera Tidak Tersedia</p>
@@ -320,17 +355,70 @@ export function MyQR() {
           </div>
         </div>
 
-        {/* Active Locker Info Card */}
-        <div className="w-full bg-white border border-gray-200 rounded-2xl p-4 flex items-center justify-between shadow-sm">
-          <div>
-            <p className="text-[11px] text-gray-400 font-medium">Sesi Sewa Aktif</p>
-            <p className="text-base font-bold text-gray-800">Loker {lockerNumber}</p>
-            <p className="text-xs text-gray-500">Ukuran {lockerSize} • {lockerLocation}</p>
+        {/* Active Locker Info Cards — ALL active sessions */}
+        <div className="w-full space-y-2.5">
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs font-bold text-gray-600">
+              Sesi Sewa Aktif ({activeBookings.length > 0 ? activeBookings.length : lockerNumber ? 1 : 0})
+            </p>
+            {activeBookings.length > 1 && (
+              <p className="text-[11px] text-gray-400">Tap untuk pilih target simulasi / remote</p>
+            )}
           </div>
-          <div className="text-right">
-            <p className="text-[11px] text-gray-400 font-medium">Sisa Waktu</p>
-            <p className="text-lg font-bold text-green-700 font-mono">{formatTime(remainingSeconds)}</p>
-          </div>
+
+          {activeBookings.length > 0 ? (
+            activeBookings.map((b, idx) => {
+              const bLockerNum = b.locker?.locker_number || '-'
+              const bSize = b.locker?.size || 'M'
+              const bHub = b.hub?.name || 'Titipin Hub'
+              const bRemaining = Math.max(0, Math.floor((new Date(b.expires_at).getTime() - Date.now()) / 1000))
+              const bOverdue = b.status === 'overdue' || bRemaining === 0
+              const isSelected = idx === selectedActiveBookingIndex
+
+              return (
+                <button
+                  key={b.id || idx}
+                  type="button"
+                  onClick={() => selectActiveBooking(idx)}
+                  className={`w-full text-left bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm border-2 transition-all ${
+                    isSelected ? 'border-green-600 bg-green-50/30' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-base font-bold text-gray-800">Loker {bLockerNum}</p>
+                      {isSelected && (
+                        <span className="text-[10px] font-bold bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                          Terpilih
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">Ukuran {bSize} • {bHub}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[11px] text-gray-400 font-medium">
+                      {bOverdue ? 'Status' : 'Sisa Waktu'}
+                    </p>
+                    <p className={`text-lg font-bold font-mono ${bOverdue ? 'text-rose-600' : 'text-green-700'}`}>
+                      {bOverdue ? 'TERLAMBAT' : formatTime(bRemaining)}
+                    </p>
+                  </div>
+                </button>
+              )
+            })
+          ) : (
+            <div className="w-full bg-white border border-gray-200 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+              <div>
+                <p className="text-[11px] text-gray-400 font-medium">Sesi Sewa Aktif</p>
+                <p className="text-base font-bold text-gray-800">Loker {lockerNumber || '-'}</p>
+                <p className="text-xs text-gray-500">Ukuran {lockerSize} • {lockerLocation}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[11px] text-gray-400 font-medium">Sisa Waktu</p>
+                <p className="text-lg font-bold text-green-700 font-mono">{formatTime(remainingSeconds)}</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
