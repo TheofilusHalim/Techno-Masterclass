@@ -1025,7 +1025,7 @@ export async function validateAndUnlockByQR(
   scannedPayload: string,
   expectedLockerNumber: string = 'M-07',
   userId?: string
-): Promise<{ success: boolean; lockerNumber: string; message: string; bookingId?: string }> {
+): Promise<{ success: boolean; lockerNumber: string; message: string; bookingId?: string; requiresPayment?: boolean }> {
   try {
     const trimmed = scannedPayload.trim()
 
@@ -1088,6 +1088,28 @@ export async function validateAndUnlockByQR(
     const bookingId = matchedBookingId || lockerData?.current_booking_id || undefined
 
     if (isOverdue) {
+      // Cek apakah ada denda keterlambatan yang harus dibayar dulu
+      if (bookingId && isValidUUID(bookingId)) {
+        const { data: bRow } = await supabase
+          .from('bookings')
+          .select('expires_at')
+          .eq('id', bookingId)
+          .maybeSingle()
+        if (bRow?.expires_at) {
+          const overdueMin = Math.max(0, Math.floor((Date.now() - new Date(bRow.expires_at).getTime()) / 60000))
+          if (overdueMin > 0) {
+            const fee = overdueMin <= 30 ? 2000 : 2000 + Math.ceil((overdueMin - 30) / 30) * 1000
+            return {
+              success: false,
+              requiresPayment: true,
+              lockerNumber: extractedLocker,
+              bookingId,
+              message: `Loker ${extractedLocker} sedang overdue (denda Rp ${fee.toLocaleString('id-ID')}). Lunasi denda di menu Loker Saya sebelum membuka pintu.`,
+            }
+          }
+        }
+      }
+
       const res = await confirmItemsRetrieved(bookingId || null, extractedLocker, 'QR_SCAN')
       return {
         success: res.success,

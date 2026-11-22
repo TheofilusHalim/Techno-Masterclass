@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#15803d" />
+    <title>Email Terkonfirmasi — Titipin</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(160deg, #f0fdf4 0%, #ffffff 60%, #f3f4f6 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        color: #111827;
+      }
+      .card {
+        width: 100%;
+        max-width: 400px;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 24px;
+        padding: 36px 28px;
+        text-align: center;
+        box-shadow: 0 20px 40px -15px rgba(21, 128, 61, 0.14);
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #15803d;
+        margin-bottom: 24px;
+      }
+      .icon-wrap {
+        width: 76px;
+        height: 76px;
+        border-radius: 9999px;
+        background: #dcfce7;
+        box-shadow: 0 0 0 10px #f0fdf4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 24px;
+      }
+      h1 {
+        font-size: 22px;
+        font-weight: 800;
+        color: #111827;
+        margin-bottom: 8px;
+        letter-spacing: -0.02em;
+      }
+      p.desc {
+        font-size: 14px;
+        color: #4b5563;
+        line-height: 1.6;
+        margin-bottom: 24px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 14px 20px;
+        border-radius: 14px;
+        background: #15803d;
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 8px 18px -6px rgba(21, 128, 61, 0.45);
+        transition: background 0.15s ease, transform 0.1s ease;
+      }
+      .btn:hover {
+        background: #166534;
+      }
+      .btn:active {
+        transform: scale(0.98);
+      }
+      .status {
+        margin-top: 16px;
+        font-size: 12px;
+        color: #6b7280;
+      }
+      .footer {
+        margin-top: 28px;
+        padding-top: 16px;
+        border-top: 1px solid #f3f4f6;
+        font-size: 11px;
+        color: #9ca3af;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="brand">TITIPIN SMART LOCKER</div>
+
+      <div class="icon-wrap" aria-hidden="true">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+          <polyline points="22 4 12 14.01 9 11.01" />
+        </svg>
+      </div>
+
+      <h1>Email Berhasil Dikonfirmasi</h1>
+      <p class="desc">
+        Akun Titipin Anda telah aktif dan siap digunakan. Anda akan diarahkan kembali ke aplikasi secara otomatis.
+      </p>
+
+      <a id="open-app-btn" class="btn" href="com.titipin.app://auth-callback?verified=1">
+        Buka Aplikasi Titipin
+      </a>
+
+      <p id="status-text" class="status">Membuka aplikasi dalam 2 detik...</p>
+
+      <div class="footer">
+        Titipin Smart Digital Locker • Universitas Kristen Petra
+      </div>
+    </main>
+
+    <script>
+      (function () {
+        var search = window.location.search || '';
+        var hash = window.location.hash || '';
+        var queryPrefix = search ? search + '&verified=1' : '?verified=1';
+        var deepLink = 'com.titipin.app://auth-callback' + queryPrefix + hash;
+
+        var btn = document.getElementById('open-app-btn');
+        var statusEl = document.getElementById('status-text');
+        if (btn) btn.setAttribute('href', deepLink);
+
+        var isAndroid = /Android/i.test(navigator.userAgent);
+        var intentUrl =
+          'intent://auth-callback' +
+          queryPrefix +
+          hash +
+          '#Intent;scheme=com.titipin.app;package=com.titipin.app;end';
+
+        function openApp() {
+          if (isAndroid) {
+            window.location.href = intentUrl;
+          } else {
+            window.location.href = deepLink;
+          }
+        }
+
+        if (btn) {
+          btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            openApp();
+          });
+        }
+
+        setTimeout(function () {
+          if (statusEl) {
+            statusEl.textContent = 'Mengalihkan ke aplikasi Titipin... Jika belum terbuka, tekan tombol di atas.';
+          }
+          openApp();
+        }, 1600);
+      })();
+    </script>
+  </body>
+</html>

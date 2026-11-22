@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { App as CapApp } from '@capacitor/app'
+import { Capacitor } from '@capacitor/core'
 import { BottomNav } from './BottomNav'
 import { useStore } from '../store/useStore'
 import { supabase } from '../lib/supabase'
@@ -31,6 +33,38 @@ export function AppShell() {
         setIsUpdateModalOpen(true)
       }
     })
+
+    // Handle Android deep link callback from email confirmation page
+    let urlListener: { remove: () => Promise<void> } | null = null
+    if (Capacitor.isNativePlatform()) {
+      CapApp.addListener('appUrlOpen', async ({ url }) => {
+        if (url && url.startsWith('com.titipin.app://auth-callback')) {
+          const isRecovery = url.includes('type=recovery')
+          try {
+            const hashPart = url.split('#')[1]
+            if (hashPart) {
+              const params = new URLSearchParams(hashPart)
+              const access_token = params.get('access_token')
+              const refresh_token = params.get('refresh_token')
+              if (access_token && refresh_token) {
+                await supabase.auth.setSession({ access_token, refresh_token })
+                navigate(isRecovery ? '/auth?reset=1' : '/', { replace: true })
+                return
+              }
+            }
+          } catch (err) {
+            console.warn('Deep link auth session error:', err)
+          }
+          navigate(isRecovery ? '/auth?reset=1' : '/auth?verified=1', { replace: true })
+        }
+      }).then((handle) => {
+        urlListener = handle
+      })
+    }
+
+    return () => {
+      urlListener?.remove()
+    }
   }, [])
 
   useEffect(() => {

@@ -316,6 +316,10 @@ export function MyLocker() {
 
                         <button
                           onClick={() => {
+                            if (bOverdue) {
+                              handleRetrieveItems(idx)
+                              return
+                            }
                             if (activeBookings[idx]) selectActiveBooking(idx)
                             triggerUnlock(`Tombol Buka Loker (${bLockerNum})`, 'REMOTE_APP')
                           }}
@@ -323,15 +327,27 @@ export function MyLocker() {
                           className={`flex flex-col items-center justify-center gap-1 py-3 px-2 rounded-2xl font-bold text-xs transition-all shadow-md min-h-[50px] ${
                             isDoorOpen && bLockerNum === lockerNumber
                               ? 'bg-emerald-300 text-emerald-950 font-black animate-pulse border-2 border-emerald-400'
+                              : bOverdue
+                              ? 'bg-rose-500 text-white hover:bg-rose-400 active:scale-95'
                               : 'bg-white text-green-800 hover:bg-green-50 active:scale-95'
                           }`}
                         >
                           <div className="flex items-center gap-1">
                             <Unlock size={16} className={isDoorOpen && bLockerNum === lockerNumber ? 'animate-bounce' : ''} />
-                            <span>{isDoorOpen && bLockerNum === lockerNumber ? t('lockerDoorOpened') : t('lockerUnlockDoor')}</span>
+                            <span>
+                              {isDoorOpen && bLockerNum === lockerNumber
+                                ? t('lockerDoorOpened')
+                                : bOverdue
+                                ? 'Bayar & Buka'
+                                : t('lockerUnlockDoor')}
+                            </span>
                           </div>
-                          <span className="text-[9px] text-gray-500 font-medium">
-                            {isDoorOpen && bLockerNum === lockerNumber ? 'Auto-lock 5s' : 'Remote Unlock'}
+                          <span className={`text-[9px] font-medium ${bOverdue ? 'text-rose-100' : 'text-gray-500'}`}>
+                            {isDoorOpen && bLockerNum === lockerNumber
+                              ? 'Auto-lock 5s'
+                              : bOverdue
+                              ? 'Wajib Lunasi Denda'
+                              : 'Remote Unlock'}
                           </span>
                         </button>
                       </div>

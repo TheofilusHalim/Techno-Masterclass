@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, MapPin, Package, Clock, CheckCircle2, ShieldCheck, AlertCircle, Sparkles, Crown } from 'lucide-react'
+import { ArrowLeft, MapPin, Package, Clock, CheckCircle2, ShieldCheck, AlertCircle, Sparkles, Crown, QrCode, Wallet, Landmark } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { processBookingTransaction } from '../lib/lockerService'
 
@@ -19,21 +19,21 @@ const PAYMENT_METHODS = [
     key: 'qris',
     label: 'QRIS Instant',
     desc: 'BCA, Mandiri, GoPay, OVO, ShopeePay, DANA & seluruh mobile banking',
-    icon: '⬛',
+    icon: QrCode,
     badge: 'Verifikasi Otomatis',
   },
   {
     key: 'ewallet',
     label: 'E-Wallet (1-Klik)',
     desc: 'GoPay, OVO, DANA, ShopeePay',
-    icon: '💳',
+    icon: Wallet,
     badge: 'Langsung Aktif',
   },
   {
     key: 'va',
     label: 'Virtual Account',
     desc: 'BCA, Mandiri, BNI, BRI, Permata VA',
-    icon: '🏦',
+    icon: Landmark,
     badge: 'Bebas Admin',
   },
 ]
@@ -319,7 +319,7 @@ export function Payment() {
             </div>
 
             <div className="space-y-2.5">
-              {PAYMENT_METHODS.map(({ key, label, desc, icon, badge }) => {
+              {PAYMENT_METHODS.map(({ key, label, desc, icon: MethodIcon, badge }) => {
                 const isSelected = selectedPayment === key
                 return (
                   <button
@@ -331,7 +331,13 @@ export function Payment() {
                         : 'border-gray-200 bg-white hover:border-green-300'
                     }`}
                   >
-                    <span className="text-2xl flex-shrink-0">{icon}</span>
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
+                        isSelected ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      <MethodIcon size={19} />
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
                         <p className="text-sm font-bold text-gray-900">{label}</p>

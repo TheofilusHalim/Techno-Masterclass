@@ -12,12 +12,9 @@ export function Success() {
     return (
       <div className="flex flex-col items-center justify-center min-h-full px-6 py-10 bg-white text-center">
         {/* Success icon */}
-        <div className="relative mb-5">
-          <div className="w-24 h-24 rounded-full bg-amber-100 flex items-center justify-center shadow-inner">
-            <Crown size={56} className="text-amber-600" />
-          </div>
-          <div className="absolute -right-1 -top-1 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center animate-bounce shadow-md">
-            <span className="text-white text-base">⭐</span>
+        <div className="mb-6">
+          <div className="w-20 h-20 rounded-full bg-amber-100 ring-8 ring-amber-50 flex items-center justify-center shadow-xs">
+            <Crown size={40} className="text-amber-600" />
           </div>
         </div>
 
@@ -79,12 +76,9 @@ export function Success() {
   return (
     <div className="flex flex-col items-center justify-center min-h-full px-6 py-10 bg-white text-center">
       {/* Success icon */}
-      <div className="relative mb-5">
-        <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center shadow-inner">
-          <CheckCircle2 size={56} className="text-green-700" />
-        </div>
-        <div className="absolute -right-1 -top-1 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center animate-bounce shadow-md">
-          <span className="text-white text-base">🎉</span>
+      <div className="mb-6">
+        <div className="w-20 h-20 rounded-full bg-emerald-100 ring-8 ring-emerald-50 flex items-center justify-center shadow-xs">
+          <CheckCircle2 size={44} className="text-emerald-700" />
         </div>
       </div>
 

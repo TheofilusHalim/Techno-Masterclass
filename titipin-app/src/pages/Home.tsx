@@ -69,7 +69,7 @@ export function Home() {
   return (
     <div className="flex flex-col min-h-full bg-white">
       {/* Header */}
-      <div className="bg-green-700 px-4 pt-12 pb-6">
+      <div className="bg-gradient-to-br from-emerald-800 via-green-700 to-green-800 px-4 pt-12 pb-6">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5 text-green-100 text-xs">
             <Navigation size={13} />
@@ -111,7 +111,13 @@ export function Home() {
         <div className="flex items-baseline justify-between">
           <div>
             <p className="text-green-200 text-xs font-medium">
-              {isAuthenticated ? `Hi, ${userName} 👋` : (language === 'en' ? 'Welcome to Titipin 👋' : 'Selamat datang di Titipin 👋')}
+              {isAuthenticated
+                ? language === 'en'
+                  ? `Welcome back, ${userName}`
+                  : `Halo, ${userName}`
+                : language === 'en'
+                ? 'Welcome to Titipin'
+                : 'Selamat datang di Titipin'}
             </p>
             <h1 className="text-white text-2xl font-bold mt-0.5">{t('homeFindLocker')}</h1>
           </div>

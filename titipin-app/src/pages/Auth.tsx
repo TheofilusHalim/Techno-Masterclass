@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft, Mail, Lock, User, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { supabase } from '../lib/supabase'
 
 export function Auth() {
   const navigate = useNavigate()
@@ -10,10 +11,11 @@ export function Auth() {
 
   const { loginUser, registerUser } = useStore()
 
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot' | 'reset'>('signin')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
   const [isLoading, setIsLoading] = useState(false)
@@ -32,6 +34,14 @@ export function Auth() {
   // Clear all fields whenever the page is mounted or left
   useEffect(() => {
     resetFields()
+    const params = new URLSearchParams(location.search)
+    if (params.get('reset') === '1') {
+      setMode('reset')
+      setSuccessMessage('Silakan masukkan kata sandi baru untuk akun Anda.')
+    } else if (params.get('verified') === '1') {
+      setMode('signin')
+      setSuccessMessage('Email berhasil dikonfirmasi! Silakan masuk dengan email dan kata sandi Anda.')
+    }
     return () => {
       resetFields()
     }
@@ -46,6 +56,59 @@ export function Auth() {
     e.preventDefault()
     setErrorMessage(null)
     setSuccessMessage(null)
+
+    if (mode === 'forgot') {
+      if (!email.trim()) {
+        setErrorMessage('Please enter your registered email address.')
+        return
+      }
+      setIsLoading(true)
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: 'https://theofilushalim.github.io/Techno-Masterclass/email-confirmed.html?type=recovery',
+        })
+        if (error) {
+          setErrorMessage(error.message)
+        } else {
+          setSuccessMessage(
+            `Tautan reset kata sandi telah dikirim ke ${email.trim()}. Silakan cek kotak masuk atau folder spam email Anda.`
+          )
+        }
+      } catch (err: unknown) {
+        setErrorMessage(err instanceof Error ? err.message : String(err))
+      } finally {
+        setIsLoading(false)
+      }
+      return
+    }
+
+    if (mode === 'reset') {
+      if (password.length < 6) {
+        setErrorMessage('Kata sandi baru minimal 6 karakter.')
+        return
+      }
+      if (password !== confirmPassword) {
+        setErrorMessage('Konfirmasi kata sandi tidak cocok.')
+        return
+      }
+      setIsLoading(true)
+      try {
+        const { error } = await supabase.auth.updateUser({ password })
+        if (error) {
+          setErrorMessage(error.message)
+        } else {
+          setPassword('')
+          setConfirmPassword('')
+          setMode('signin')
+          setSuccessMessage('Kata sandi berhasil diperbarui! Silakan masuk dengan kata sandi baru Anda.')
+        }
+      } catch (err: unknown) {
+        setErrorMessage(err instanceof Error ? err.message : String(err))
+      } finally {
+        setIsLoading(false)
+      }
+      return
+    }
 
     if (!email || !password) {
       setErrorMessage('Please fill in all required fields.')
@@ -113,12 +176,22 @@ export function Auth() {
         </div>
 
         <h1 className="text-2xl font-bold tracking-tight">
-          {mode === 'signin' ? 'Welcome Back 👋' : 'Create an Account ✨'}
+          {mode === 'signin'
+            ? 'Welcome Back'
+            : mode === 'signup'
+            ? 'Create an Account'
+            : mode === 'forgot'
+            ? 'Forgot Password'
+            : 'Set New Password'}
         </h1>
         <p className="text-green-200 text-xs mt-1">
           {mode === 'signin'
             ? 'Sign in to access your digital lockers, bookings, and subscription'
-            : 'Register to start renting smart IoT lockers across Surabaya'}
+            : mode === 'signup'
+            ? 'Register to start renting smart IoT lockers across Surabaya'
+            : mode === 'forgot'
+            ? 'Enter your email address and we will send you a password reset link'
+            : 'Choose a strong new password for your Titipin account'}
         </p>
 
         {/* Tab switch */}
@@ -181,45 +254,86 @@ export function Auth() {
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">Email Address</label>
-            <div className="relative">
-              <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@example.com"
-                autoComplete="off"
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600 focus:bg-white transition-all"
-                required
-              />
+          {mode !== 'reset' && (
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Email Address</label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  autoComplete="off"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600 focus:bg-white transition-all"
+                  required
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">Password</label>
-            <div className="relative">
-              <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                autoComplete="new-password"
-                className="w-full pl-10 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600 focus:bg-white transition-all"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-gray-700">
+                {mode === 'reset' ? 'New Password' : 'Password'}
+              </label>
+              {mode === 'signin' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMessage(null)
+                    setSuccessMessage(null)
+                    setMode('forgot')
+                  }}
+                  className="text-xs font-semibold text-green-700 hover:text-green-800 hover:underline"
+                >
+                  Forgot password?
+                </button>
+              )}
             </div>
-            <p className="text-[11px] text-gray-400 mt-1">Minimum 6 characters</p>
+            {mode !== 'forgot' && (
+              <>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    className="w-full pl-10 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600 focus:bg-white transition-all"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Minimum 6 characters</p>
+              </>
+            )}
           </div>
+
+          {mode === 'reset' && (
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">Confirm New Password</label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600 focus:bg-white transition-all"
+                  required
+                />
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -233,10 +347,28 @@ export function Auth() {
               </>
             ) : mode === 'signin' ? (
               'Sign In'
-            ) : (
+            ) : mode === 'signup' ? (
               'Create Account'
+            ) : mode === 'forgot' ? (
+              'Send Reset Link'
+            ) : (
+              'Save New Password'
             )}
           </button>
+
+          {(mode === 'forgot' || mode === 'reset') && (
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMessage(null)
+                setSuccessMessage(null)
+                setMode('signin')
+              }}
+              className="w-full py-2.5 text-xs font-bold text-gray-500 hover:text-gray-800 transition-colors"
+            >
+              Back to Sign In
+            </button>
+          )}
         </form>
 
         <p className="text-center text-[11px] text-gray-400 mt-6 leading-relaxed">

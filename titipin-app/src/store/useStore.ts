@@ -729,6 +729,7 @@ export const useStore = create<AppState>((set, get) => ({
         email: email.trim(),
         password,
         options: {
+          emailRedirectTo: 'https://theofilushalim.github.io/Techno-Masterclass/email-confirmed.html',
           data: {
             full_name: fullName.trim(),
           },

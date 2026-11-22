@@ -26,6 +26,7 @@ export function MyQR() {
   const [scanResult, setScanResult] = useState<string | null>(null)
   const [scannedLockerNum, setScannedLockerNum] = useState<string | null>(null)
   const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle')
+  const [requiresFinePayment, setRequiresFinePayment] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [cameraPermissionGranted, setCameraPermissionGranted] = useState<boolean | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -145,6 +146,7 @@ export function MyQR() {
     const result = await validateAndUnlockByQR(payload, lockerNumber, userId || undefined)
 
     if (result.success) {
+      setRequiresFinePayment(false)
       setScannedLockerNum(result.lockerNumber)
       setScanStatus('success')
       // Match selected booking in store if present so local UI reflects unlock
@@ -155,6 +157,7 @@ export function MyQR() {
       triggerUnlock(`QR Scanner (${payload})`, 'QR_SCAN')
       loadActiveBooking(userId || undefined)
     } else {
+      setRequiresFinePayment(Boolean(result.requiresPayment))
       setScanStatus('error')
       setErrorMessage(result.message)
     }
@@ -269,20 +272,33 @@ export function MyQR() {
             </div>
           )}
 
-          {/* Scan Error Overlay (Account mismatch) */}
+          {/* Scan Error Overlay (Account mismatch or Overdue payment required) */}
           {scanStatus === 'error' && (
             <div className="absolute inset-0 bg-rose-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-white text-center">
               <AlertCircle size={36} className="text-rose-400 mb-2" />
-              <p className="text-sm font-bold">QR Tidak Cocok dengan Akun</p>
+              <p className="text-sm font-bold">
+                {requiresFinePayment ? 'Wajib Lunasi Denda Dulu' : 'QR Tidak Cocok dengan Akun'}
+              </p>
               <p className="text-xs text-rose-200 mt-1 max-w-[260px] leading-relaxed">
                 {errorMessage || 'Loker ini tidak terdaftar pada sesi sewa aktif akun Anda.'}
               </p>
-              <button
-                onClick={handleResetScan}
-                className="mt-4 px-4 py-2 bg-white text-rose-900 rounded-xl text-xs font-bold shadow-md hover:bg-rose-50 transition-all"
-              >
-                <RefreshCw size={13} className="inline mr-1" /> Scan Ulang
-              </button>
+              <div className="mt-4 flex gap-2">
+                {requiresFinePayment ? (
+                  <button
+                    onClick={() => navigate('/my-locker')}
+                    className="px-4 py-2 bg-rose-500 text-white rounded-xl text-xs font-bold shadow-md hover:bg-rose-400 transition-all"
+                  >
+                    Bayar Denda di Loker Saya →
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleResetScan}
+                    className="px-4 py-2 bg-white text-rose-900 rounded-xl text-xs font-bold shadow-md hover:bg-rose-50 transition-all"
+                  >
+                    <RefreshCw size={13} className="inline mr-1" /> Scan Ulang
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -334,7 +350,17 @@ export function MyQR() {
 
           {/* Remote Open Button */}
           <button
-            onClick={() => triggerUnlock('Remote Unlock Button (MyQR)', 'REMOTE_APP')}
+            onClick={() => {
+              const selectedBooking = activeBookings[selectedActiveBookingIndex]
+              const isSelectedOverdue =
+                selectedBooking &&
+                (selectedBooking.status === 'overdue' || new Date(selectedBooking.expires_at).getTime() <= Date.now())
+              if (isSelectedOverdue) {
+                navigate('/my-locker')
+                return
+              }
+              triggerUnlock('Remote Unlock Button (MyQR)', 'REMOTE_APP')
+            }}
             disabled={isDoorOpen}
             className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all shadow-sm ${
               isDoorOpen

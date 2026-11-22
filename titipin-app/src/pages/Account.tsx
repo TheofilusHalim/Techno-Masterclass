@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown, LogIn, Shield, User, CheckCircle2, Check, ArrowUpCircle } from 'lucide-react'
+import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown, LogIn, Shield, User, CheckCircle2, Check, ArrowUpCircle, KeyRound, Eye, EyeOff, X, Loader2, AlertCircle } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useTranslation } from '../utils/i18n'
+import { supabase } from '../lib/supabase'
 import { checkForAppUpdate, getInstalledAppVersion, CURRENT_APP_VERSION, type AppVersionInfo } from '../lib/versionService'
 import { AppUpdateModal } from '../components/AppUpdateModal'
 
@@ -15,6 +16,13 @@ export function Account() {
   const { userName, userEmail, isAuthenticated, hasMonthlyPlan, logoutUser, language, setLanguage } = useStore()
   const { t } = useTranslation()
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false)
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showNewPass, setShowNewPass] = useState(false)
+  const [showConfirmPass, setShowConfirmPass] = useState(false)
+  const [passwordLoading, setPasswordLoading] = useState(false)
+  const [passwordError, setPasswordError] = useState<string | null>(null)
   const [manualUpdateInfo, setManualUpdateInfo] = useState<AppVersionInfo | null>(null)
   const [isManualUpdateOpen, setIsManualUpdateOpen] = useState(false)
   const [updateToast, setUpdateToast] = useState<string | null>(null)
@@ -44,7 +52,65 @@ export function Account() {
     }
   }
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordError(null)
+
+    if (newPassword.length < 6) {
+      setPasswordError(
+        language === 'en'
+          ? 'New password must be at least 6 characters.'
+          : 'Kata sandi baru minimal 6 karakter.'
+      )
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError(
+        language === 'en'
+          ? 'Password confirmation does not match.'
+          : 'Konfirmasi kata sandi tidak cocok.'
+      )
+      return
+    }
+
+    setPasswordLoading(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword })
+      if (error) {
+        setPasswordError(error.message)
+      } else {
+        setIsPasswordModalOpen(false)
+        setNewPassword('')
+        setConfirmPassword('')
+        setUpdateToast(
+          language === 'en'
+            ? 'Password updated successfully.'
+            : 'Kata sandi berhasil diperbarui.'
+        )
+        setTimeout(() => setUpdateToast(null), 3500)
+      }
+    } catch (err: unknown) {
+      setPasswordError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPasswordLoading(false)
+    }
+  }
+
   const menuItems = [
+    ...(isAuthenticated
+      ? [
+          {
+            icon: KeyRound,
+            label: language === 'en' ? 'Change Password' : 'Ubah Kata Sandi',
+            action: () => {
+              setPasswordError(null)
+              setNewPassword('')
+              setConfirmPassword('')
+              setIsPasswordModalOpen(true)
+            },
+          },
+        ]
+      : []),
     { icon: Bell, label: t('accNotifications'), action: () => navigate('/notifications') },
     { icon: MessageSquare, label: t('accLiveChat'), action: () => navigate('/live-chat') },
     { icon: HelpCircle, label: t('accFaq'), action: () => navigate('/faq') },
@@ -189,7 +255,7 @@ export function Account() {
           ))}
         </div>
 
-        <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.6 • Connected to Supabase Auth</p>
+        <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.7 • Connected to Supabase Auth</p>
       </div>
 
       {/* Language Selection Dialog / Popup */}
@@ -224,13 +290,13 @@ export function Account() {
                   code: 'id' as const,
                   label: 'Bahasa Indonesia',
                   desc: 'Bahasa Indonesia (ID)',
-                  flag: '🇮🇩',
+                  badge: 'ID',
                 },
                 {
                   code: 'en' as const,
                   label: 'English',
                   desc: 'English (US)',
-                  flag: '🇺🇸',
+                  badge: 'EN',
                 },
               ].map((opt) => {
                 const isSelected = language === opt.code
@@ -248,7 +314,13 @@ export function Account() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">{opt.flag}</span>
+                      <span
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-extrabold tracking-wider ${
+                          isSelected ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {opt.badge}
+                      </span>
                       <div className="text-left">
                         <p className="text-sm font-bold text-gray-900">{opt.label}</p>
                         <p className="text-xs text-gray-500">{opt.desc}</p>
@@ -272,6 +344,118 @@ export function Account() {
             >
               {language === 'id' ? 'Batal' : 'Cancel'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {isPasswordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-green-100 text-green-700 flex items-center justify-center">
+                  <KeyRound size={17} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-gray-900">
+                    {language === 'en' ? 'Change Password' : 'Ubah Kata Sandi'}
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    {language === 'en' ? 'Update your account password securely' : 'Perbarui kata sandi akun Anda'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPasswordModalOpen(false)}
+                aria-label="Tutup"
+                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {passwordError && (
+              <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-3 text-xs">
+                <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+                <span>{passwordError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleChangePassword} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  {language === 'en' ? 'New Password' : 'Kata Sandi Baru'}
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPass ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder={language === 'en' ? 'Minimum 6 characters' : 'Minimal 6 karakter'}
+                    className="w-full pr-10 pl-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 outline-none focus:border-green-600 focus:bg-white transition-all"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPass((v) => !v)}
+                    aria-label="Toggle password visibility"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  {language === 'en' ? 'Confirm New Password' : 'Konfirmasi Kata Sandi Baru'}
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPass ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder={language === 'en' ? 'Re-enter new password' : 'Ulangi kata sandi baru'}
+                    className="w-full pr-10 pl-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 outline-none focus:border-green-600 focus:bg-white transition-all"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPass((v) => !v)}
+                    aria-label="Toggle confirm password visibility"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 space-y-2">
+                <button
+                  type="submit"
+                  disabled={passwordLoading}
+                  className="w-full py-3 bg-green-700 hover:bg-green-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
+                >
+                  {passwordLoading && <Loader2 size={14} className="animate-spin" />}
+                  {passwordLoading
+                    ? language === 'en'
+                      ? 'Saving...'
+                      : 'Menyimpan...'
+                    : language === 'en'
+                    ? 'Save New Password'
+                    : 'Simpan Kata Sandi'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordModalOpen(false)}
+                  className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all"
+                >
+                  {language === 'en' ? 'Cancel' : 'Batal'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

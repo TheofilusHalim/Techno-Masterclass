@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, MapPin, Minus, Plus, ShieldCheck, Clock, Check, AlertCircle, Crown, Sparkles } from 'lucide-react'
+import { ArrowLeft, MapPin, Minus, Plus, ShieldCheck, Clock, Check, AlertCircle, Crown, Sparkles, Backpack, Briefcase, Luggage, Ruler } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { supabase } from '../lib/supabase'
 
@@ -9,7 +9,7 @@ export interface SizeOption {
   subtitle: string
   desc: string
   rate: number
-  emoji: string
+  icon: typeof Backpack
   dimensions: string
   idealFor: string
 }
@@ -20,7 +20,7 @@ const SIZE_OPTIONS: SizeOption[] = [
     subtitle: 'Tas Ransel / Laptop s.d. 16"',
     desc: 'Backpack 15-20L, buku kuliah, helm half-face, barang bawaan harian',
     rate: 2000,
-    emoji: '🎒',
+    icon: Backpack,
     dimensions: '30 × 40 × 45 cm',
     idealFor: 'Mahasiswa & Komuter harian',
   },
@@ -29,16 +29,16 @@ const SIZE_OPTIONS: SizeOption[] = [
     subtitle: 'Helm Full-Face, Jaket & Koper Kabin',
     desc: 'Koper kabin 20 inch, helm full-face, tas belanja, atau ransel besar',
     rate: 3000,
-    emoji: '💼',
+    icon: Briefcase,
     dimensions: '45 × 50 × 55 cm',
     idealFor: 'Short trip & helm motor',
   },
   {
     key: 'L',
     subtitle: 'Carrier 60-80L / Koper 28-32"',
-    desc: 'Muat carrier ransel gunung 60-80L atau koper bagasi besar. Pas untuk koper besar & perjalanan jauh!',
+    desc: 'Muat carrier ransel gunung 60-80L atau koper bagasi besar. Pas untuk koper besar & perjalanan jauh.',
     rate: 5000,
-    emoji: '🧳',
+    icon: Luggage,
     dimensions: '60 × 75 × 65 cm',
     idealFor: 'Traveller, turis & carrier besar',
   },
@@ -192,7 +192,7 @@ export function HubDetail() {
           </div>
 
           <div className="space-y-3">
-            {SIZE_OPTIONS.map(({ key, subtitle, desc, rate, emoji, dimensions, idealFor }) => {
+            {SIZE_OPTIONS.map(({ key, subtitle, desc, rate, icon: SizeIcon, dimensions, idealFor }) => {
               const freeCount = availableSlots[key] ?? 0
               const isOutOfStock = freeCount === 0
               const isSelected = selectedSize === key && !isOutOfStock
@@ -212,7 +212,13 @@ export function HubDetail() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <span className="text-3xl flex-shrink-0 mt-0.5">{emoji}</span>
+                    <div
+                      className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${
+                        isSelected ? 'bg-green-700 text-white shadow-xs' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      <SizeIcon size={20} />
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-1">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -239,8 +245,9 @@ export function HubDetail() {
                       <p className="text-xs text-gray-600 leading-snug mb-1.5">{desc}</p>
 
                       <div className="flex items-center justify-between text-[11px] pt-1 border-t border-gray-100">
-                        <span className="text-gray-500 font-mono">
-                          📐 {dimensions}
+                        <span className="text-gray-500 font-mono inline-flex items-center gap-1">
+                          <Ruler size={12} className="text-gray-400" />
+                          {dimensions}
                         </span>
                         {isSizeCovered ? (
                           <span className="font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex items-center gap-1">
@@ -254,7 +261,7 @@ export function HubDetail() {
                       </div>
 
                       <p className="text-[10px] text-gray-400 mt-0.5">
-                        💡 Cocok untuk: {idealFor}
+                        Cocok untuk: {idealFor}
                       </p>
                     </div>
 

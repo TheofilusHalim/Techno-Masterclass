@@ -1,11 +1,11 @@
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, ChevronRight, CalendarClock, CreditCard, Lock, MessageSquare } from 'lucide-react'
 
 const TOPICS = [
-  { key: 'booking', label: 'Booking issue', desc: "Can't complete or modify a booking", emoji: '📋' },
-  { key: 'payment', label: 'Payment issue', desc: 'Payment failed or not confirmed', emoji: '💳' },
-  { key: 'locker', label: 'Locker problem', desc: 'Will not open or is damaged', emoji: '🔒' },
-  { key: 'other', label: 'Other', desc: 'Something else not listed above', emoji: '💬' },
+  { key: 'booking', label: 'Booking issue', desc: "Can't complete or modify a booking", icon: CalendarClock },
+  { key: 'payment', label: 'Payment issue', desc: 'Payment failed or not confirmed', icon: CreditCard },
+  { key: 'locker', label: 'Locker problem', desc: 'Will not open or is damaged', icon: Lock },
+  { key: 'other', label: 'Other', desc: 'Something else not listed above', icon: MessageSquare },
 ]
 
 export function LiveChatTopics() {
@@ -29,13 +29,15 @@ export function LiveChatTopics() {
       <div className="flex-1 px-4 py-6">
         <p className="text-sm font-semibold text-gray-700 mb-4">What can we help you with?</p>
         <div className="space-y-3">
-          {TOPICS.map(({ key, label, desc, emoji }) => (
+          {TOPICS.map(({ key, label, desc, icon: TopicIcon }) => (
             <button
               key={key}
               onClick={() => navigate('/chat-support', { state: { topic: label } })}
-              className="w-full flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-2xl hover:border-green-300 hover:shadow-sm active:scale-[0.98] transition-all"
+              className="w-full flex items-center gap-3.5 p-4 bg-white border border-gray-200 rounded-2xl hover:border-green-300 hover:shadow-sm active:scale-[0.98] transition-all"
             >
-              <span className="text-3xl">{emoji}</span>
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center flex-shrink-0 border border-emerald-100">
+                <TopicIcon size={19} />
+              </div>
               <div className="flex-1 text-left">
                 <p className="text-sm font-semibold text-gray-800">{label}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{desc}</p>

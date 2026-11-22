@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { MapPin } from 'lucide-react'
 import { Geolocation } from '@capacitor/geolocation'
 import { Capacitor } from '@capacitor/core'
 import type { HubWithStats } from '../lib/lockerService'
@@ -19,12 +20,12 @@ interface LiveMapProps {
   onSelectHub?: (hub: HubWithStats) => void
 }
 
-/** Category → emoji label */
+/** Category → short clean label */
 function categoryEmoji(category: string) {
-  if (category === 'campus') return '🎓'
-  if (category === 'station') return '🚉'
-  if (category === 'mall') return '🛍️'
-  return '📦'
+  if (category === 'campus') return 'C'
+  if (category === 'station') return 'S'
+  if (category === 'mall') return 'M'
+  return 'T'
 }
 
 export function LiveMap({ hubs, onSelectHub }: LiveMapProps) {
@@ -256,11 +257,19 @@ export function LiveMap({ hubs, onSelectHub }: LiveMapProps) {
         className="absolute top-3 left-3 z-[1000] flex items-center gap-1.5 bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-[10px] font-medium shadow-md transition-all active:scale-95 cursor-pointer hover:bg-white"
         title="Klik untuk mendeteksi ulang lokasi GPS"
       >
-        {locationStatus === 'loading' && <span className="text-gray-600 animate-pulse">📍 Mencari lokasi…</span>}
-        {locationStatus === 'ok' && <span className="text-blue-600 font-semibold">📍 Lokasi ditemukan</span>}
+        {locationStatus === 'loading' && (
+          <span className="text-gray-600 animate-pulse flex items-center gap-1">
+            <MapPin size={11} className="text-gray-500" /> Mencari lokasi…
+          </span>
+        )}
+        {locationStatus === 'ok' && (
+          <span className="text-blue-600 font-semibold flex items-center gap-1">
+            <MapPin size={11} className="text-blue-600" /> Lokasi ditemukan
+          </span>
+        )}
         {locationStatus === 'denied' && (
           <span className="text-orange-600 font-semibold flex items-center gap-1">
-            📍 GPS tidak aktif • <span className="underline">Minta Akses</span>
+            <MapPin size={11} className="text-orange-500" /> GPS tidak aktif • <span className="underline">Minta Akses</span>
           </span>
         )}
       </button>
