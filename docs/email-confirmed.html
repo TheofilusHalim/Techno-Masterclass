@@ -114,8 +114,8 @@
         </svg>
       </div>
 
-      <h1>Email Berhasil Dikonfirmasi</h1>
-      <p class="desc">
+      <h1 id="page-title">Email Berhasil Dikonfirmasi</h1>
+      <p id="page-desc" class="desc">
         Akun Titipin Anda telah aktif dan siap digunakan. Anda akan diarahkan kembali ke aplikasi secara otomatis.
       </p>
 
@@ -134,6 +134,15 @@
       (function () {
         var search = window.location.search || '';
         var hash = window.location.hash || '';
+        var isRecovery = search.indexOf('type=recovery') !== -1 || hash.indexOf('type=recovery') !== -1;
+
+        if (isRecovery) {
+          var titleEl = document.getElementById('page-title');
+          var descEl = document.getElementById('page-desc');
+          if (titleEl) titleEl.textContent = 'Reset Kata Sandi Siap';
+          if (descEl) descEl.textContent = 'Tautan reset terverifikasi. Anda akan diarahkan kembali ke aplikasi Titipin untuk mengatur kata sandi baru.';
+        }
+
         var queryPrefix = search ? search + '&verified=1' : '?verified=1';
         var deepLink = 'com.titipin.app://auth-callback' + queryPrefix + hash;
 

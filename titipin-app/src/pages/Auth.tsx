@@ -45,7 +45,7 @@ export function Auth() {
     return () => {
       resetFields()
     }
-  }, [location.pathname])
+  }, [location.pathname, location.search])
 
   const handleTabChange = (newMode: 'signin' | 'signup') => {
     setMode(newMode)

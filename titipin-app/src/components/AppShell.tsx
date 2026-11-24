@@ -34,29 +34,48 @@ export function AppShell() {
       }
     })
 
-    // Handle Android deep link callback from email confirmation page
+    // Handle Android deep link callback from email confirmation / password recovery page
+    const handleDeepLinkUrl = async (url?: string | null) => {
+      if (!url || !url.startsWith('com.titipin.app://auth-callback')) return
+
+      const isRecovery = url.includes('type=recovery')
+      try {
+        const queryPart = url.split('?')[1]?.split('#')[0] || ''
+        const hashPart = url.split('#')[1] || ''
+        const queryParams = new URLSearchParams(queryPart)
+        const hashParams = new URLSearchParams(hashPart)
+
+        const code = queryParams.get('code') || hashParams.get('code')
+        const access_token = hashParams.get('access_token') || queryParams.get('access_token')
+        const refresh_token = hashParams.get('refresh_token') || queryParams.get('refresh_token')
+
+        if (code) {
+          await supabase.auth.exchangeCodeForSession(code)
+          navigate(isRecovery ? '/auth?reset=1' : '/', { replace: true })
+          return
+        }
+
+        if (access_token && refresh_token) {
+          await supabase.auth.setSession({ access_token, refresh_token })
+          navigate(isRecovery ? '/auth?reset=1' : '/', { replace: true })
+          return
+        }
+      } catch (err) {
+        console.warn('Deep link auth session error:', err)
+      }
+      navigate(isRecovery ? '/auth?reset=1' : '/auth?verified=1', { replace: true })
+    }
+
     let urlListener: { remove: () => Promise<void> } | null = null
     if (Capacitor.isNativePlatform()) {
-      CapApp.addListener('appUrlOpen', async ({ url }) => {
-        if (url && url.startsWith('com.titipin.app://auth-callback')) {
-          const isRecovery = url.includes('type=recovery')
-          try {
-            const hashPart = url.split('#')[1]
-            if (hashPart) {
-              const params = new URLSearchParams(hashPart)
-              const access_token = params.get('access_token')
-              const refresh_token = params.get('refresh_token')
-              if (access_token && refresh_token) {
-                await supabase.auth.setSession({ access_token, refresh_token })
-                navigate(isRecovery ? '/auth?reset=1' : '/', { replace: true })
-                return
-              }
-            }
-          } catch (err) {
-            console.warn('Deep link auth session error:', err)
-          }
-          navigate(isRecovery ? '/auth?reset=1' : '/auth?verified=1', { replace: true })
-        }
+      // Handle cold start launch via deep link
+      CapApp.getLaunchUrl().then((res) => {
+        if (res?.url) handleDeepLinkUrl(res.url)
+      })
+
+      // Handle warm resume via deep link
+      CapApp.addListener('appUrlOpen', ({ url }) => {
+        handleDeepLinkUrl(url)
       }).then((handle) => {
         urlListener = handle
       })
@@ -99,7 +118,10 @@ export function AppShell() {
       setIsCheckingAuth(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        navigate('/auth?reset=1', { replace: true })
+      }
       if (session?.user) {
         const displayName =
           session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'User'

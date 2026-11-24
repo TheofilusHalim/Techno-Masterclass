@@ -255,7 +255,7 @@ export function Account() {
           ))}
         </div>
 
-        <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.7 • Connected to Supabase Auth</p>
+        <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.8 • Connected to Supabase Auth</p>
       </div>
 
       {/* Language Selection Dialog / Popup */}
