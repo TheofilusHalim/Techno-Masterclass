@@ -143,8 +143,19 @@
           if (descEl) descEl.textContent = 'Tautan reset terverifikasi. Anda akan diarahkan kembali ke aplikasi Titipin untuk mengatur kata sandi baru.';
         }
 
-        var queryPrefix = search ? search + '&verified=1' : '?verified=1';
-        var deepLink = 'com.titipin.app://auth-callback' + queryPrefix + hash;
+        // Gabungkan parameter dari ?query dan #hash ke dalam query string
+        // agar tidak terpotong oleh fragmen #Intent; di Chrome Android
+        var mergedParams = new URLSearchParams(search);
+        if (hash && hash.length > 1) {
+          var hashParams = new URLSearchParams(hash.slice(1));
+          hashParams.forEach(function (val, key) {
+            mergedParams.set(key, val);
+          });
+        }
+        mergedParams.set('verified', '1');
+
+        var qs = '?' + mergedParams.toString();
+        var deepLink = 'com.titipin.app://auth-callback' + qs;
 
         var btn = document.getElementById('open-app-btn');
         var statusEl = document.getElementById('status-text');
@@ -153,8 +164,7 @@
         var isAndroid = /Android/i.test(navigator.userAgent);
         var intentUrl =
           'intent://auth-callback' +
-          queryPrefix +
-          hash +
+          qs +
           '#Intent;scheme=com.titipin.app;package=com.titipin.app;end';
 
         function openApp() {
