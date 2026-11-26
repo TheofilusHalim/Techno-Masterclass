@@ -1,34 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Clock, CheckCircle2, MapPin, Bell, Trash2, Sparkles, KeyRound, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Clock, CheckCircle2, MapPin, Bell, Trash2 } from 'lucide-react'
 import { useStore, type AppNotification } from '../store/useStore'
 import { useTranslation } from '../utils/i18n'
-import { requestNotificationPermission } from '../lib/notificationService'
 
 export function Notifications() {
   const navigate = useNavigate()
-  const { notifications, addNotification, clearNotifications, markNotificationsRead } = useStore()
-  const { t, language } = useTranslation()
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const { notifications, clearNotifications, markNotificationsRead } = useStore()
+  const { t } = useTranslation()
 
   // Mark read when screen opens safely inside useEffect
   useEffect(() => {
     markNotificationsRead()
   }, [markNotificationsRead])
-
-  const showFeedback = (msg: string) => {
-    setToastMessage(msg)
-    setTimeout(() => setToastMessage(null), 3500)
-  }
-
-  const handleRequestPermission = async () => {
-    const granted = await requestNotificationPermission()
-    if (granted) {
-      showFeedback(language === 'en' ? 'System notifications enabled!' : 'Izin notifikasi sistem aktif!')
-    } else {
-      showFeedback(language === 'en' ? 'Permission requested or already set.' : 'Izin notifikasi telah diminta.')
-    }
-  }
 
   const getIconForType = (type: AppNotification['type']) => {
     switch (type) {
@@ -41,52 +25,6 @@ export function Notifications() {
       default:
         return { Icon: MapPin, iconColor: 'text-blue-500', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' }
     }
-  }
-
-  // Simulator helper triggers
-  const triggerSimulatePayment = () => {
-    addNotification({
-      type: 'success',
-      title: language === 'en' ? 'Payment Confirmed' : 'Pembayaran Berhasil',
-      message:
-        language === 'en'
-          ? 'Your payment of Rp6,000 for Locker M-07 (Petra Christian University) was successful.'
-          : 'Pembayaran sewa Rp6.000 untuk Loker M-07 di Petra Christian University berhasil diverifikasi.',
-      timeAgo: 'Baru saja',
-      action: '/my-locker',
-      actionLabel: language === 'en' ? 'Open My Locker' : 'Buka Loker Saya',
-    })
-    showFeedback(language === 'en' ? 'Payment notification sent to phone!' : 'Notifikasi pembayaran dikirim ke HP!')
-  }
-
-  const triggerSimulateWarning = () => {
-    addNotification({
-      type: 'warning',
-      title: language === 'en' ? 'Warning: Time Almost Up!' : 'Peringatan: Waktu Hampir Habis!',
-      message:
-        language === 'en'
-          ? 'Locker M-07 rental expires in 10 minutes. Extend now to avoid late fines.'
-          : 'Sewa Loker M-07 tersisa 10 menit. Segera perpanjang sewa agar terhindar dari denda terlambat.',
-      timeAgo: 'Baru saja',
-      action: '/my-locker',
-      actionLabel: language === 'en' ? 'Extend Now' : 'Perpanjang Sekarang',
-    })
-    showFeedback(language === 'en' ? '10-minute warning sent to phone!' : 'Peringatan sisa 10 menit dikirim ke HP!')
-  }
-
-  const triggerSimulateUnlock = () => {
-    addNotification({
-      type: 'info',
-      title: language === 'en' ? 'Locker Door Unlocked' : 'Pintu Loker Terbuka',
-      message:
-        language === 'en'
-          ? 'Door for Locker M-07 has been unlocked remotely via app. Please close firmly when finished.'
-          : 'Pintu Loker M-07 berhasil dibuka melalui aplikasi. Harap tutup rapat setelah mengambil barang.',
-      timeAgo: 'Baru saja',
-      action: '/my-locker',
-      actionLabel: language === 'en' ? 'Check Status' : 'Lihat Status',
-    })
-    showFeedback(language === 'en' ? 'Door unlock notification sent to phone!' : 'Notifikasi buka pintu dikirim ke HP!')
   }
 
   return (
@@ -117,53 +55,6 @@ export function Notifications() {
       </div>
 
       <div className="flex-1 px-4 py-5 space-y-4 overflow-y-auto">
-        {/* Interactive Notification Testing Simulator */}
-        <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-green-200 rounded-2xl p-3.5 shadow-2xs">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles size={16} className="text-green-700" />
-            <p className="text-xs font-bold text-green-900">{t('notifSimulatorTitle')}</p>
-          </div>
-          <p className="text-[11px] text-gray-600 mb-2.5">
-            {language === 'en'
-              ? 'Tap any button below to trigger and test simulated real-time notifications:'
-              : 'Sentuh tombol di bawah untuk memicu dan menguji sistem notifikasi secara instan:'}
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={triggerSimulatePayment}
-              className="px-2 py-2 bg-white border border-green-300 rounded-xl text-[10px] font-bold text-green-800 hover:bg-green-50 active:scale-95 shadow-xs transition-all flex flex-col items-center gap-1"
-            >
-              <CheckCircle2 size={14} className="text-green-600" />
-              <span className="text-center leading-tight">{t('notifSimulatePayment')}</span>
-            </button>
-            <button
-              onClick={triggerSimulateWarning}
-              className="px-2 py-2 bg-white border border-orange-300 rounded-xl text-[10px] font-bold text-orange-800 hover:bg-orange-50 active:scale-95 shadow-xs transition-all flex flex-col items-center gap-1"
-            >
-              <Clock size={14} className="text-orange-500" />
-              <span className="text-center leading-tight">{t('notifSimulateWarning')}</span>
-            </button>
-            <button
-              onClick={triggerSimulateUnlock}
-              className="px-2 py-2 bg-white border border-blue-300 rounded-xl text-[10px] font-bold text-blue-800 hover:bg-blue-50 active:scale-95 shadow-xs transition-all flex flex-col items-center gap-1"
-            >
-              <KeyRound size={14} className="text-blue-500" />
-              <span className="text-center leading-tight">{t('notifSimulateUnlock')}</span>
-            </button>
-          </div>
-
-          <div className="mt-2.5 pt-2 border-t border-green-200/60 flex items-center justify-between text-[11px]">
-            <span className="text-gray-500">{language === 'en' ? 'System Notification Permission:' : 'Izin Notifikasi HP:'}</span>
-            <button
-              onClick={handleRequestPermission}
-              className="text-green-700 font-bold hover:underline flex items-center gap-1"
-            >
-              <ShieldCheck size={13} />
-              <span>{language === 'en' ? 'Check / Enable' : 'Cek / Aktifkan'}</span>
-            </button>
-          </div>
-        </div>
-
         {/* Notifications list */}
         {notifications.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
@@ -205,14 +96,6 @@ export function Notifications() {
           </div>
         )}
       </div>
-
-      {/* Toast Feedback */}
-      {toastMessage && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] bg-gray-900/90 text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg backdrop-blur-xs flex items-center gap-2 border border-white/10 animate-fade-in whitespace-nowrap">
-          <CheckCircle2 size={16} className="text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
     </div>
   )
 }

@@ -9,7 +9,7 @@ export function Auth() {
   const location = useLocation()
   const from = (location.state as { from?: string })?.from || '/'
 
-  const { loginUser, registerUser, logoutUser } = useStore()
+  const { loginUser, registerUser, logoutUser, isAuthenticated } = useStore()
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot' | 'reset'>('signin')
   const [fullName, setFullName] = useState('')
@@ -17,6 +17,7 @@ export function Auth() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -28,6 +29,7 @@ export function Auth() {
     setPassword('')
     setConfirmPassword('')
     setShowPassword(false)
+    setShowConfirmPassword(false)
     setErrorMessage(null)
     setSuccessMessage(null)
   }
@@ -175,15 +177,27 @@ export function Auth() {
       {/* Header */}
       <div className="bg-green-700 px-4 pt-12 pb-8 text-white relative">
         <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => {
-              resetFields()
-              navigate(-1)
-            }}
-            className="p-2 rounded-full bg-green-600 hover:bg-green-500 transition-colors"
-          >
-            <ArrowLeft size={18} className="text-white" />
-          </button>
+          {(isAuthenticated || mode === 'forgot' || mode === 'reset') && (
+            <button
+              type="button"
+              onClick={() => {
+                if (mode === 'forgot' || mode === 'reset') {
+                  resetFields()
+                  setMode('signin')
+                  if (location.search) {
+                    navigate('/auth', { replace: true })
+                  }
+                } else {
+                  resetFields()
+                  navigate(-1)
+                }
+              }}
+              aria-label="Kembali"
+              className="p-2 rounded-full bg-green-600 hover:bg-green-500 transition-colors"
+            >
+              <ArrowLeft size={18} className="text-white" />
+            </button>
+          )}
           <span className="text-sm font-semibold tracking-wide text-green-200 uppercase">
             Titipin Account
           </span>
@@ -209,7 +223,7 @@ export function Auth() {
         </p>
 
         {/* Tab switch */}
-        {mode !== 'reset' && (
+        {(mode === 'signin' || mode === 'signup') && (
           <div className="flex p-1 bg-green-800/70 backdrop-blur rounded-2xl mt-5">
             <button
               type="button"
@@ -288,50 +302,49 @@ export function Auth() {
             </div>
           )}
 
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-bold text-gray-700">
-                {mode === 'reset' ? 'New Password' : 'Password'}
-              </label>
-              {mode === 'signin' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setErrorMessage(null)
-                    setSuccessMessage(null)
-                    setMode('forgot')
-                  }}
-                  className="text-xs font-semibold text-green-700 hover:text-green-800 hover:underline"
-                >
-                  Forgot password?
-                </button>
-              )}
-            </div>
-            {mode !== 'forgot' && (
-              <>
-                <div className="relative">
-                  <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    autoComplete="new-password"
-                    className="w-full pl-10 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600 focus:bg-white transition-all"
-                    required
-                  />
+          {mode !== 'forgot' && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-gray-700">
+                  {mode === 'reset' ? 'New Password' : 'Password'}
+                </label>
+                {mode === 'signin' && (
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                    onClick={() => {
+                      setErrorMessage(null)
+                      setSuccessMessage(null)
+                      setMode('forgot')
+                    }}
+                    className="text-xs font-semibold text-green-700 hover:text-green-800 hover:underline"
                   >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    Forgot password?
                   </button>
-                </div>
-                <p className="text-[11px] text-gray-400 mt-1">Minimum 6 characters</p>
-              </>
-            )}
-          </div>
+                )}
+              </div>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                  className="w-full pl-10 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600 focus:bg-white transition-all"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label="Toggle password visibility"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">Minimum 6 characters</p>
+            </div>
+          )}
 
           {mode === 'reset' && (
             <div>
@@ -339,14 +352,22 @@ export function Auth() {
               <div className="relative">
                 <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
-                  type={showPassword ? 'text' : 'password'}
+                  type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
                   autoComplete="new-password"
-                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600 focus:bg-white transition-all"
+                  className="w-full pl-10 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-600 focus:bg-white transition-all"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  aria-label="Toggle confirm password visibility"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
           )}
@@ -390,9 +411,11 @@ export function Auth() {
           )}
         </form>
 
-        <p className="text-center text-[11px] text-gray-400 mt-6 leading-relaxed">
-          {mode === 'signin' ? 'By signing in' : 'By signing up'}, you agree to Titipin Terms of Service and Privacy Policy. Connected to Supabase Auth.
-        </p>
+        {(mode === 'signin' || mode === 'signup') && (
+          <p className="text-center text-[11px] text-gray-400 mt-6 leading-relaxed">
+            {mode === 'signin' ? 'By signing in' : 'By signing up'}, you agree to Titipin Terms of Service and Privacy Policy.
+          </p>
+        )}
       </div>
     </div>
   )

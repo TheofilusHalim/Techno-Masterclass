@@ -28,3 +28,19 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Full-bleed QR scanner camera without default library white frame */
+#qr-reader-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+#qr-reader-container video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block;
+}
+#qr-reader-container #qr-shaded-region {
+  display: none !important;
+}

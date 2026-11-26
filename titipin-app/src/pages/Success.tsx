@@ -88,13 +88,12 @@ export function Success() {
         Ukuran {lockerSize} • {lockerLocation}
       </p>
 
-      {/* Instructions: Modern QR Scan & Remote Unlock (No outdated PIN) */}
+      {/* Instructions: QR Scan Only */}
       <div className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-6 text-left space-y-3 shadow-xs">
         {[
           { step: '1', title: 'Tuju Loker Anda', desc: `Datang ke ${lockerLocation} dan cari pintu nomor ${lockerNumber}.` },
           { step: '2', title: 'Scan QR di Layar LCD', desc: 'Gunakan kamera HP di aplikasi untuk scan QR dinamis pada pintu loker.' },
-          { step: '3', title: 'Remote Unlock Cadangan', desc: 'Bisa juga tekan tombol Buka Kunci Jarak Jauh di aplikasi via internet.' },
-          { step: '4', title: 'Bebas Denda', desc: 'Perpanjang sewa kapan saja dari aplikasi jika butuh waktu lebih lama.' },
+          { step: '3', title: 'Bebas Denda', desc: 'Perpanjang sewa kapan saja dari aplikasi jika butuh waktu lebih lama.' },
         ].map(({ step, title, desc }) => (
           <div key={step} className="flex items-start gap-3">
             <span className="w-6 h-6 rounded-full bg-green-700 text-white text-xs font-black flex items-center justify-center flex-shrink-0 mt-0.5 shadow-xs">
@@ -123,7 +122,7 @@ export function Success() {
           className="w-full py-3.5 bg-green-50 text-green-800 border border-green-200 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-green-100 active:scale-95 transition-all"
         >
           <Package size={18} />
-          Lihat Loker Saya & Remote Unlock
+          Lihat Loker Saya
         </button>
 
         <button

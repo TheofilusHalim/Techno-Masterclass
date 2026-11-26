@@ -42,12 +42,13 @@ export function LiveMap({ hubs, onSelectHub }: LiveMapProps) {
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
 
-    // Init map
+    // Init map (disable scrollWheelZoom so page scrolling is never hijacked)
     const map = L.map(mapContainerRef.current, {
       center: [DEFAULT_LAT, DEFAULT_LNG],
       zoom: 14,
       zoomControl: false,
       attributionControl: false,
+      scrollWheelZoom: false,
     })
 
     // OpenStreetMap tile layer (free, no key)
@@ -55,9 +56,6 @@ export function LiveMap({ hubs, onSelectHub }: LiveMapProps) {
       maxZoom: 19,
       attribution: '© OpenStreetMap contributors',
     }).addTo(map)
-
-    // Minimal attribution bottom-left
-    L.control.attribution({ prefix: false, position: 'bottomleft' }).addTo(map)
 
     mapRef.current = map
 

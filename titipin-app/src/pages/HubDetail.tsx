@@ -17,7 +17,7 @@ export interface SizeOption {
 const SIZE_OPTIONS: SizeOption[] = [
   {
     key: 'S',
-    subtitle: 'Tas Ransel / Laptop s.d. 16"',
+    subtitle: 'Tas Ransel / Laptop 16"',
     desc: 'Backpack 15-20L, buku kuliah, helm half-face, barang bawaan harian',
     rate: 2000,
     icon: Backpack,
@@ -186,7 +186,7 @@ export function HubDetail() {
               <span className="text-[11px] text-gray-400 animate-pulse">Cek ketersediaan...</span>
             ) : (
               <span className="text-[11px] text-green-700 font-semibold bg-green-50 px-2 py-0.5 rounded-md">
-                Live Supabase Slots
+                Slot Tersedia Live
               </span>
             )}
           </div>
@@ -244,17 +244,17 @@ export function HubDetail() {
 
                       <p className="text-xs text-gray-600 leading-snug mb-1.5">{desc}</p>
 
-                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-gray-100">
-                        <span className="text-gray-500 font-mono inline-flex items-center gap-1">
-                          <Ruler size={12} className="text-gray-400" />
+                      <div className="flex items-center justify-between gap-2 flex-wrap text-[11px] pt-1.5 border-t border-gray-100">
+                        <span className="text-gray-500 font-mono inline-flex items-center gap-1 whitespace-nowrap">
+                          <Ruler size={12} className="text-gray-400 flex-shrink-0" />
                           {dimensions}
                         </span>
                         {isSizeCovered ? (
-                          <span className="font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md flex items-center gap-1">
-                            <Sparkles size={11} /> Gratis (Benefit Member)
+                          <span className="font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md inline-flex items-center gap-1 whitespace-nowrap">
+                            <Sparkles size={11} className="flex-shrink-0" /> Gratis VIP
                           </span>
                         ) : (
-                          <span className="font-bold text-green-700">
+                          <span className="font-bold text-green-700 whitespace-nowrap">
                             {formatIDR(rate)}/jam
                           </span>
                         )}
@@ -333,7 +333,7 @@ export function HubDetail() {
           <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-200 rounded-xl p-3">
             <ShieldCheck size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-xs text-blue-900 leading-relaxed">
-              <strong>Anti-Denda (No Fine Policy):</strong> Anda akan menerima pengingat 10 menit sebelum waktu sewa habis. Perpanjang instan kapan saja (+1 Jam) lewat aplikasi tanpa pinalti!
+              <strong>Anti-Denda (No Fine Policy):</strong> Anda akan menerima pengingat 10 menit sebelum waktu sewa habis. Perpanjang instan kapan saja (+1 Jam) lewat aplikasi tanpa penalti!
             </div>
           </div>
 

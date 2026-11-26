@@ -1,7 +1,15 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronRight, CalendarClock, CreditCard, Lock, MessageSquare } from 'lucide-react'
+import { useTranslation } from '../utils/i18n'
 
-const TOPICS = [
+const TOPICS_ID = [
+  { key: 'booking', label: 'Kendala pemesanan', desc: 'Tidak bisa menyelesaikan atau mengubah pesanan', icon: CalendarClock },
+  { key: 'payment', label: 'Masalah pembayaran', desc: 'Pembayaran gagal atau belum terkonfirmasi', icon: CreditCard },
+  { key: 'locker', label: 'Kendala loker', desc: 'Pintu tidak terbuka atau ada kerusakan loker', icon: Lock },
+  { key: 'other', label: 'Lainnya', desc: 'Pertanyaan lain di luar daftar di atas', icon: MessageSquare },
+]
+
+const TOPICS_EN = [
   { key: 'booking', label: 'Booking issue', desc: "Can't complete or modify a booking", icon: CalendarClock },
   { key: 'payment', label: 'Payment issue', desc: 'Payment failed or not confirmed', icon: CreditCard },
   { key: 'locker', label: 'Locker problem', desc: 'Will not open or is damaged', icon: Lock },
@@ -10,26 +18,36 @@ const TOPICS = [
 
 export function LiveChatTopics() {
   const navigate = useNavigate()
+  const { language } = useTranslation()
+  const topics = language === 'en' ? TOPICS_EN : TOPICS_ID
 
   return (
     <div className="flex flex-col min-h-full bg-white">
       {/* Header */}
       <div className="bg-green-700 px-4 pt-12 pb-5">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full bg-green-600 hover:bg-green-500 transition-colors">
+          <button
+            onClick={() => navigate(-1)}
+            aria-label={language === 'en' ? 'Back' : 'Kembali'}
+            className="p-2 rounded-full bg-green-600 hover:bg-green-500 transition-colors"
+          >
             <ArrowLeft size={18} className="text-white" />
           </button>
           <div>
             <h1 className="text-white text-xl font-bold">Live Chat</h1>
-            <p className="text-green-200 text-xs mt-0.5">We typically reply in under 2 minutes</p>
+            <p className="text-green-200 text-xs mt-0.5">
+              {language === 'en' ? 'We typically reply in under 2 minutes' : 'Biasanya dibalas kurang dari 2 menit'}
+            </p>
           </div>
         </div>
       </div>
 
       <div className="flex-1 px-4 py-6">
-        <p className="text-sm font-semibold text-gray-700 mb-4">What can we help you with?</p>
+        <p className="text-sm font-semibold text-gray-700 mb-4">
+          {language === 'en' ? 'What can we help you with?' : 'Ada yang bisa kami bantu?'}
+        </p>
         <div className="space-y-3">
-          {TOPICS.map(({ key, label, desc, icon: TopicIcon }) => (
+          {topics.map(({ key, label, desc, icon: TopicIcon }) => (
             <button
               key={key}
               onClick={() => navigate('/chat-support', { state: { topic: label } })}
@@ -49,9 +67,17 @@ export function LiveChatTopics() {
 
         {/* Operating hours */}
         <div className="mt-6 p-4 bg-gray-50 rounded-2xl border border-gray-200">
-          <p className="text-xs font-semibold text-gray-600 mb-1">Support Hours</p>
-          <p className="text-xs text-gray-500">Daily: 07:00 – 22:00 WIB</p>
-          <p className="text-xs text-gray-400 mt-1">For emergencies (locker stuck), we respond 24/7.</p>
+          <p className="text-xs font-semibold text-gray-600 mb-1">
+            {language === 'en' ? 'Support Hours' : 'Jam Layanan'}
+          </p>
+          <p className="text-xs text-gray-500">
+            {language === 'en' ? 'Daily: 07:00 – 22:00 WIB' : 'Setiap hari: 07:00 – 22:00 WIB'}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            {language === 'en'
+              ? 'For emergencies (locker stuck), we respond 24/7.'
+              : 'Untuk kondisi darurat (loker macet), kami siap membantu 24/7.'}
+          </p>
         </div>
       </div>
     </div>

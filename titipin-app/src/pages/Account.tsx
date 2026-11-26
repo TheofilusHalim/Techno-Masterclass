@@ -203,12 +203,12 @@ export function Account() {
             </div>
           ) : (
             <div className="pt-3 border-t border-green-600/60 space-y-2">
-              <div className="flex items-center justify-between text-xs text-green-100">
-                <span className="flex items-center gap-1.5 font-medium">
-                  <CheckCircle2 size={14} className="text-amber-300" />
-                  {language === 'en' ? 'Membership Status:' : 'Status Keanggotaan:'} <strong>{t('txActive')}</strong>
+              <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-green-100">
+                <span className="flex items-center gap-1.5 font-medium whitespace-nowrap">
+                  <CheckCircle2 size={14} className="text-amber-300 flex-shrink-0" />
+                  {language === 'en' ? 'Status:' : 'Status Keanggotaan:'} <strong>{t('txActive')}</strong>
                 </span>
-                <span className="text-[11px] bg-black/20 text-green-200 px-2 py-0.5 rounded-md font-mono">
+                <span className="text-[11px] bg-black/20 text-green-200 px-2 py-0.5 rounded-md font-mono whitespace-nowrap">
                   {t('accOneAccount')}
                 </span>
               </div>
@@ -245,7 +245,7 @@ export function Account() {
           ))}
         </div>
 
-        <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.9 • Connected to Supabase Auth</p>
+        <p className="text-center text-xs text-gray-400 pb-2">Titipin v1.0.10 • Smart Digital Locker</p>
       </div>
 
       {/* Language Selection Dialog / Popup */}
@@ -268,9 +268,10 @@ export function Account() {
               </div>
               <button
                 onClick={() => setIsLanguageModalOpen(false)}
-                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-xs font-bold transition-colors"
+                aria-label="Tutup"
+                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors"
               >
-                ✕
+                <X size={14} />
               </button>
             </div>
 
@@ -479,7 +480,7 @@ export function Account() {
 
       {/* Update Status Toast Notification */}
       {updateToast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999] bg-gray-900/90 text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg backdrop-blur-xs flex items-center gap-2 border border-white/10 animate-fade-in whitespace-nowrap">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[9999] bg-gray-900/90 text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg backdrop-blur-xs flex items-center gap-2 border border-white/10 animate-fade-in whitespace-nowrap">
           <CheckCircle2 size={16} className="text-emerald-400" />
           <span>{updateToast}</span>
         </div>

@@ -1,14 +1,58 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Camera, RefreshCw, Zap, ShieldCheck, CheckCircle2, AlertCircle, Radio, Sparkles } from 'lucide-react'
+import { ArrowLeft, Camera, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react'
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { useStore } from '../store/useStore'
 import { validateAndUnlockByQR } from '../lib/lockerService'
 import { formatTime } from '../utils/time'
 
+// Module-level serialized camera queue & active scanner ref to prevent
+// concurrent camera starts (e.g. React StrictMode double-mount) or orphaned MediaStreams.
+let cameraOpQueue: Promise<void> = Promise.resolve()
+let activeGlobalScanner: Html5Qrcode | null = null
+
+function enqueueCameraOp(op: () => Promise<void>): Promise<void> {
+  const next = cameraOpQueue.then(op, op)
+  cameraOpQueue = next.catch(() => {})
+  return next
+}
+
+function releaseAllVideoTracks(containerId: string) {
+  const container = document.getElementById(containerId)
+  if (!container) return
+  container.querySelectorAll('video').forEach((video) => {
+    const stream = video.srcObject as MediaStream | null
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop())
+      video.srcObject = null
+    }
+  })
+}
+
+async function stopActiveGlobalScanner(containerId: string) {
+  const scanner = activeGlobalScanner
+  activeGlobalScanner = null
+  if (scanner) {
+    try {
+      if (scanner.isScanning) {
+        await scanner.stop()
+      }
+    } catch (err) {
+      console.warn('Stop scanner warning:', err)
+    }
+    try {
+      scanner.clear()
+    } catch {
+      // ignore clear error
+    }
+  }
+  releaseAllVideoTracks(containerId)
+}
+
 export function MyQR() {
   const navigate = useNavigate()
   const {
+    hasActiveLocker,
     activeBookings,
     selectedActiveBookingIndex,
     selectActiveBooking,
@@ -20,7 +64,6 @@ export function MyQR() {
     remainingSeconds,
     tickLockerTimer,
     triggerUnlock,
-    isDoorOpen,
   } = useStore()
 
   const [scanResult, setScanResult] = useState<string | null>(null)
@@ -32,9 +75,17 @@ export function MyQR() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [, setNowTick] = useState(() => Date.now())
 
-  const scannerRef = useRef<Html5Qrcode | null>(null)
   const scannerContainerId = 'qr-reader-container'
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const isMountedRef = useRef(true)
+  const startAttemptRef = useRef(0)
+
+  const hasActiveSession = activeBookings.length > 0 || (hasActiveLocker && Boolean(lockerNumber))
+
+  const stopScanner = () =>
+    enqueueCameraOp(async () => {
+      await stopActiveGlobalScanner(scannerContainerId)
+    })
 
   useEffect(() => {
     loadActiveBooking(userId || undefined)
@@ -51,85 +102,105 @@ export function MyQR() {
     }
   }, [tickLockerTimer])
 
-  // Initialize and start Camera Scanner
-  const startScanner = async () => {
-    try {
-      setErrorMessage(null)
-      setScanStatus('scanning')
-
-      // Stop existing instance if any
-      if (scannerRef.current) {
-        try {
-          await scannerRef.current.stop()
-        } catch {
-          // ignore
-        }
-      }
-
-      const html5QrCode = new Html5Qrcode(scannerContainerId, {
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        verbose: false,
-      })
-      scannerRef.current = html5QrCode
-
-      const cameras = await Html5Qrcode.getCameras()
-      if (!cameras || cameras.length === 0) {
-        setCameraPermissionGranted(false)
-        setErrorMessage('No camera device found on this device. You can use the Quick Test Scan button below.')
-        setScanStatus('idle')
-        return
-      }
-
-      setCameraPermissionGranted(true)
-
-      // Prefer rear camera on mobile devices
-      const selectedCamera = cameras.find((c) => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear')) || cameras[0]
-
-      await html5QrCode.start(
-        selectedCamera.id,
-        {
-          fps: 10,
-          qrbox: { width: 230, height: 230 },
-          aspectRatio: 1.0,
-        },
-        async (decodedText) => {
-          // On successful scan
-          handleQrScanned(decodedText)
-        },
-        () => {
-          // Frame scan error (no QR detected in current frame) — normal, keep scanning
-        }
-      )
-    } catch (err: unknown) {
-      console.warn('Camera start error:', err)
-      setCameraPermissionGranted(false)
-      const msg = err instanceof Error ? err.message : String(err)
-      setErrorMessage(
-        msg.includes('NotAllowedError') || msg.includes('Permission')
-          ? 'Camera permission was denied. Please allow camera access in browser settings, or use the quick test scan button below.'
-          : 'Unable to start camera. You can use the quick test button below to verify the locker opening flow.'
-      )
-      setScanStatus('idle')
-    }
-  }
-
-  const stopScanner = async () => {
-    if (scannerRef.current) {
+  // Initialize and start Camera Scanner (strictly serialized via cameraOpQueue)
+  const startScanner = () => {
+    const attemptId = ++startAttemptRef.current
+    return enqueueCameraOp(async () => {
       try {
-        if (scannerRef.current.isScanning) {
-          await scannerRef.current.stop()
+        await stopActiveGlobalScanner(scannerContainerId)
+
+        if (!isMountedRef.current || attemptId !== startAttemptRef.current) {
+          releaseAllVideoTracks(scannerContainerId)
+          return
         }
-      } catch (err) {
-        console.warn('Stop scanner warning:', err)
+
+        setErrorMessage(null)
+        setScanStatus('scanning')
+
+        const cameras = await Html5Qrcode.getCameras()
+        if (!isMountedRef.current || attemptId !== startAttemptRef.current) {
+          releaseAllVideoTracks(scannerContainerId)
+          return
+        }
+
+        if (!cameras || cameras.length === 0) {
+          setCameraPermissionGranted(false)
+          setErrorMessage('Perangkat kamera tidak ditemukan. Pastikan kamera tersedia dan aktif.')
+          setScanStatus('idle')
+          return
+        }
+
+        const containerEl = document.getElementById(scannerContainerId)
+        if (!containerEl) return
+
+        setCameraPermissionGranted(true)
+
+        const html5QrCode = new Html5Qrcode(scannerContainerId, {
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          verbose: false,
+        })
+        activeGlobalScanner = html5QrCode
+
+        // Prefer rear camera on mobile devices
+        const selectedCamera =
+          cameras.find((c) => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear')) ||
+          cameras[0]
+
+        await html5QrCode.start(
+          selectedCamera.id,
+          {
+            fps: 10,
+            aspectRatio: 1.0,
+          },
+          async (decodedText) => {
+            handleQrScanned(decodedText)
+          },
+          () => {
+            // Frame scan error (no QR detected in current frame) — normal, keep scanning
+          }
+        )
+
+        // If component unmounted or superseded while camera was opening, immediately stop and release hardware
+        if (!isMountedRef.current || attemptId !== startAttemptRef.current) {
+          await stopActiveGlobalScanner(scannerContainerId)
+        }
+      } catch (err: unknown) {
+        await stopActiveGlobalScanner(scannerContainerId)
+        if (!isMountedRef.current || attemptId !== startAttemptRef.current) {
+          return
+        }
+        console.warn('Camera start error:', err)
+        setCameraPermissionGranted(false)
+        const msg = err instanceof Error ? err.message : String(err)
+        setErrorMessage(
+          msg.includes('NotAllowedError') || msg.includes('Permission')
+            ? 'Izin kamera ditolak. Harap aktifkan akses kamera di pengaturan perangkat Anda untuk memindai QR loker.'
+            : 'Tidak dapat memulai kamera. Pastikan kamera tidak sedang digunakan aplikasi lain, lalu coba lagi.'
+        )
+        setScanStatus('idle')
       }
-    }
+    })
   }
 
-  // Start scanning on mount
+  // Start scanning on mount and always release camera on unmount / pagehide
   useEffect(() => {
-    startScanner()
+    isMountedRef.current = true
+    void startScanner()
+
+    const handlePageHide = () => {
+      isMountedRef.current = false
+      startAttemptRef.current += 1
+      releaseAllVideoTracks(scannerContainerId)
+      void stopScanner()
+    }
+    window.addEventListener('pagehide', handlePageHide)
+
     return () => {
-      stopScanner()
+      window.removeEventListener('pagehide', handlePageHide)
+      isMountedRef.current = false
+      startAttemptRef.current += 1
+      releaseAllVideoTracks(scannerContainerId)
+      void stopScanner()
     }
   }, [])
 
@@ -165,12 +236,6 @@ export function MyQR() {
     setIsProcessing(false)
   }
 
-  // Demo simulator scan trigger (for testing without physical camera)
-  const handleSimulateScan = () => {
-    const mockPayload = `TITIPIN:UK_PETRA:${lockerNumber}`
-    handleQrScanned(mockPayload)
-  }
-
   const handleResetScan = () => {
     setScanResult(null)
     setScanStatus('scanning')
@@ -185,14 +250,19 @@ export function MyQR() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
+            aria-label="Kembali"
             className="p-2 rounded-full bg-green-600 hover:bg-green-500 transition-colors"
           >
             <ArrowLeft size={18} className="text-white" />
           </button>
           <div>
-            <h1 className="text-white text-xl font-bold">Scan Locker QR</h1>
+            <h1 className="text-white text-xl font-bold">Scan QR Loker</h1>
             <p className="text-green-200 text-xs mt-0.5">
-              Active: Locker {lockerNumber} • {lockerLocation}
+              {hasActiveSession
+                ? activeBookings.length > 1
+                  ? `${activeBookings.length} loker aktif • ${lockerLocation}`
+                  : `Loker aktif: ${lockerNumber} • ${lockerLocation}`
+                : 'Pindai QR pada layar LCD loker untuk membuka pintu'}
             </p>
           </div>
         </div>
@@ -207,34 +277,37 @@ export function MyQR() {
           <div className="text-xs text-emerald-900 leading-relaxed">
             <strong>Arahkan kamera ke layar LCD TFT loker.</strong>
             <p className="text-emerald-700 mt-0.5">
-              Pindai kode QR yang tampil pada pintu loker fisik ({lockerNumber}) untuk membuka kunci secara instan.
+              {hasActiveSession && lockerNumber
+                ? `Pindai kode QR yang tampil pada pintu loker fisik (${lockerNumber}) untuk membuka kunci secara instan.`
+                : 'Pindai kode QR yang tampil pada layar LCD pintu loker fisik untuk membuka kunci secara instan.'}
             </p>
           </div>
         </div>
 
         {/* Camera Viewfinder Card */}
-        <div className="w-full bg-black rounded-3xl overflow-hidden shadow-lg border border-gray-200 relative flex flex-col items-center justify-center min-h-[300px]">
-          {/* html5-qrcode video element renders inside here */}
+        <div className="w-full aspect-square max-h-[360px] bg-black rounded-3xl overflow-hidden shadow-lg border border-gray-200 relative">
+          {/* html5-qrcode video element renders full-bleed inside here */}
           <div
             id={scannerContainerId}
-            className={`w-full ${scanStatus === 'success' ? 'opacity-30' : 'opacity-100'} transition-opacity`}
-            style={{ width: '100%', minHeight: '280px' }}
+            className={`w-full h-full ${scanStatus === 'success' ? 'opacity-30' : 'opacity-100'} transition-opacity`}
           />
 
-          {/* Scanner laser overlay when scanning */}
+          {/* Single synchronized green scan frame centered precisely in viewfinder */}
           {scanStatus === 'scanning' && (
-            <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-6">
-              <div className="w-56 h-56 border-2 border-emerald-400 rounded-2xl relative shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-                {/* Corner markers */}
-                <span className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-emerald-400 rounded-tl-sm -mt-0.5 -ml-0.5" />
-                <span className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-emerald-400 rounded-tr-sm -mt-0.5 -mr-0.5" />
-                <span className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-emerald-400 rounded-bl-sm -mb-0.5 -ml-0.5" />
-                <span className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-emerald-400 rounded-br-sm -mb-0.5 -mr-0.5" />
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-52 h-52 sm:w-56 sm:h-56 border-2 border-emerald-400/90 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
+                  {/* Corner markers */}
+                  <span className="absolute top-0 left-0 w-5 h-5 border-t-4 border-l-4 border-emerald-400 rounded-tl-md -mt-0.5 -ml-0.5" />
+                  <span className="absolute top-0 right-0 w-5 h-5 border-t-4 border-r-4 border-emerald-400 rounded-tr-md -mt-0.5 -mr-0.5" />
+                  <span className="absolute bottom-0 left-0 w-5 h-5 border-b-4 border-l-4 border-emerald-400 rounded-bl-md -mb-0.5 -ml-0.5" />
+                  <span className="absolute bottom-0 right-0 w-5 h-5 border-b-4 border-r-4 border-emerald-400 rounded-br-md -mb-0.5 -mr-0.5" />
 
-                {/* Laser scan line animation */}
-                <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent absolute top-1/2 -translate-y-1/2 animate-pulse" />
+                  {/* Laser scan line */}
+                  <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent absolute top-1/2 -translate-y-1/2 animate-pulse" />
+                </div>
               </div>
-              <p className="text-white text-xs font-medium mt-3 bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm">
+              <p className="absolute bottom-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-white text-xs font-medium bg-black/65 px-3.5 py-1.5 rounded-full backdrop-blur-xs border border-white/10">
                 Posisikan QR LCD Loker di dalam kotak
               </p>
             </div>
@@ -308,144 +381,86 @@ export function MyQR() {
               <AlertCircle size={36} className="text-amber-400 mb-2" />
               <p className="text-sm font-semibold">Kamera Tidak Tersedia</p>
               <p className="text-xs text-gray-300 mt-1 max-w-[260px] leading-relaxed">
-                {errorMessage || 'Akses kamera browser belum diberikan.'}
+                {errorMessage || 'Akses kamera belum diberikan.'}
               </p>
               <button
-                onClick={handleSimulateScan}
+                onClick={startScanner}
                 className="mt-4 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-bold text-white shadow-md flex items-center gap-2 transition-all active:scale-95"
               >
-                <Sparkles size={16} />
-                Simulasi Scan QR Loker {lockerNumber}
+                <RefreshCw size={15} />
+                Coba Aktifkan Kamera
               </button>
             </div>
           )}
         </div>
 
-        {/* Quick Testing Trigger Button (Crucial for Demo & Desktop Testing) */}
-        <div className="w-full">
-          <button
-            onClick={handleSimulateScan}
-            disabled={isDoorOpen}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-50 hover:bg-emerald-100 active:scale-98 border border-emerald-300 rounded-2xl text-xs font-semibold text-emerald-800 transition-all shadow-sm"
-          >
-            <Sparkles size={15} className="text-emerald-600" />
-            <span>Simulasi Scan QR LCD ({lockerNumber})</span>
-            <span className="text-[10px] bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded-full font-mono">
-              TITIPIN:UK_PETRA:{lockerNumber}
-            </span>
-          </button>
-        </div>
-
-        {/* Remote Unlock & Fallback Card */}
-        <div className="w-full bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Akses Cadangan (Fallback)</p>
-              <p className="text-xs font-bold text-gray-800">Tanpa Scan QR LCD</p>
+        {/* Active Locker Info Cards — ONLY rendered when user has active locker rental(s) */}
+        {hasActiveSession && (
+          <div className="w-full space-y-2.5">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs font-bold text-gray-600">
+                Sesi Sewa Aktif ({activeBookings.length > 0 ? activeBookings.length : 1})
+              </p>
+              {activeBookings.length > 1 && (
+                <p className="text-[11px] text-gray-400">Otomatis cocokkan saat scan QR</p>
+              )}
             </div>
-            <span className="flex items-center gap-1 text-[11px] text-green-700 bg-green-100 px-2.5 py-1 rounded-full font-medium">
-              <Radio size={12} className="animate-pulse" /> Online
-            </span>
-          </div>
 
-          {/* Remote Open Button */}
-          <button
-            onClick={() => {
-              const selectedBooking = activeBookings[selectedActiveBookingIndex]
-              const isSelectedOverdue =
-                selectedBooking &&
-                (selectedBooking.status === 'overdue' || new Date(selectedBooking.expires_at).getTime() <= Date.now())
-              if (isSelectedOverdue) {
-                navigate('/my-locker')
-                return
-              }
-              triggerUnlock('Remote Unlock Button (MyQR)', 'REMOTE_APP')
-            }}
-            disabled={isDoorOpen}
-            className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all shadow-sm ${
-              isDoorOpen
-                ? 'bg-green-600 text-white animate-pulse'
-                : 'bg-green-700 text-white hover:bg-green-800 active:scale-95'
-            }`}
-          >
-            <Zap size={16} />
-            {isDoorOpen ? 'Pintu Terbuka (5 detik)...' : 'Buka Kunci Jarak Jauh (Remote Unlock)'}
-          </button>
+            {activeBookings.length > 0 ? (
+              activeBookings.map((b, idx) => {
+                const bLockerNum = b.locker?.locker_number || '-'
+                const bSize = b.locker?.size || 'M'
+                const bHub = b.hub?.name || 'Titipin Hub'
+                const bRemaining = Math.max(0, Math.floor((new Date(b.expires_at).getTime() - Date.now()) / 1000))
+                const bOverdue = b.status === 'overdue' || bRemaining === 0
+                const isSelected = idx === selectedActiveBookingIndex
 
-          {/* RFID Fallback info */}
-          <div className="flex items-start gap-2 pt-1 text-[11px] text-gray-500 border-t border-gray-200">
-            <ShieldCheck size={14} className="text-green-600 flex-shrink-0 mt-0.5" />
-            <span>
-              <strong>Akses Kartu RFID:</strong> Anda juga dapat langsung menempelkan kartu RFID terdaftar pada modul sensor pintu loker fisik.
-            </span>
-          </div>
-        </div>
-
-        {/* Active Locker Info Cards — ALL active sessions */}
-        <div className="w-full space-y-2.5">
-          <div className="flex items-center justify-between px-1">
-            <p className="text-xs font-bold text-gray-600">
-              Sesi Sewa Aktif ({activeBookings.length > 0 ? activeBookings.length : lockerNumber ? 1 : 0})
-            </p>
-            {activeBookings.length > 1 && (
-              <p className="text-[11px] text-gray-400">Tap untuk pilih target simulasi / remote</p>
+                return (
+                  <button
+                    key={b.id || idx}
+                    type="button"
+                    onClick={() => selectActiveBooking(idx)}
+                    className={`w-full text-left bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm border-2 transition-all ${
+                      isSelected ? 'border-green-600 bg-green-50/30' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-base font-bold text-gray-800">Loker {bLockerNum}</p>
+                        {isSelected && (
+                          <span className="text-[10px] font-bold bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                            Terpilih
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">Ukuran {bSize} • {bHub}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[11px] text-gray-400 font-medium">
+                        {bOverdue ? 'Status' : 'Sisa Waktu'}
+                      </p>
+                      <p className={`text-lg font-bold font-mono ${bOverdue ? 'text-rose-600' : 'text-green-700'}`}>
+                        {bOverdue ? 'TERLAMBAT' : formatTime(bRemaining)}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })
+            ) : (
+              <div className="w-full bg-white border border-gray-200 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                <div>
+                  <p className="text-[11px] text-gray-400 font-medium">Sesi Sewa Aktif</p>
+                  <p className="text-base font-bold text-gray-800">Loker {lockerNumber}</p>
+                  <p className="text-xs text-gray-500">Ukuran {lockerSize} • {lockerLocation}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] text-gray-400 font-medium">Sisa Waktu</p>
+                  <p className="text-lg font-bold text-green-700 font-mono">{formatTime(remainingSeconds)}</p>
+                </div>
+              </div>
             )}
           </div>
-
-          {activeBookings.length > 0 ? (
-            activeBookings.map((b, idx) => {
-              const bLockerNum = b.locker?.locker_number || '-'
-              const bSize = b.locker?.size || 'M'
-              const bHub = b.hub?.name || 'Titipin Hub'
-              const bRemaining = Math.max(0, Math.floor((new Date(b.expires_at).getTime() - Date.now()) / 1000))
-              const bOverdue = b.status === 'overdue' || bRemaining === 0
-              const isSelected = idx === selectedActiveBookingIndex
-
-              return (
-                <button
-                  key={b.id || idx}
-                  type="button"
-                  onClick={() => selectActiveBooking(idx)}
-                  className={`w-full text-left bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm border-2 transition-all ${
-                    isSelected ? 'border-green-600 bg-green-50/30' : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-base font-bold text-gray-800">Loker {bLockerNum}</p>
-                      {isSelected && (
-                        <span className="text-[10px] font-bold bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
-                          Terpilih
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500">Ukuran {bSize} • {bHub}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[11px] text-gray-400 font-medium">
-                      {bOverdue ? 'Status' : 'Sisa Waktu'}
-                    </p>
-                    <p className={`text-lg font-bold font-mono ${bOverdue ? 'text-rose-600' : 'text-green-700'}`}>
-                      {bOverdue ? 'TERLAMBAT' : formatTime(bRemaining)}
-                    </p>
-                  </div>
-                </button>
-              )
-            })
-          ) : (
-            <div className="w-full bg-white border border-gray-200 rounded-2xl p-4 flex items-center justify-between shadow-sm">
-              <div>
-                <p className="text-[11px] text-gray-400 font-medium">Sesi Sewa Aktif</p>
-                <p className="text-base font-bold text-gray-800">Loker {lockerNumber || '-'}</p>
-                <p className="text-xs text-gray-500">Ukuran {lockerSize} • {lockerLocation}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] text-gray-400 font-medium">Sisa Waktu</p>
-                <p className="text-lg font-bold text-green-700 font-mono">{formatTime(remainingSeconds)}</p>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   )

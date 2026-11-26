@@ -179,7 +179,7 @@ export function Home() {
           </div>
 
           {/* S, M, L slot availability badges */}
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-2 mt-3 flex-wrap">
             {[
               { s: 'S', n: nearestHub?.slots.S ?? 4 },
               { s: 'M', n: nearestHub?.slots.M ?? 3 },
@@ -188,10 +188,13 @@ export function Home() {
               <span
                 key={s}
                 className={`text-xs px-2.5 py-1 rounded-lg font-medium ${
-                  n > 0 ? 'bg-gray-100 text-gray-700' : 'bg-red-50 text-red-400 line-through'
+                  n > 0 ? 'bg-gray-100 text-gray-700' : 'bg-rose-50 text-rose-600'
                 }`}
               >
-                Size {s}: <strong className="text-green-700">{n}</strong>
+                Size {s}:{' '}
+                <strong className={n > 0 ? 'text-green-700' : 'text-rose-600'}>
+                  {n > 0 ? n : language === 'en' ? 'Full' : 'Penuh'}
+                </strong>
               </span>
             ))}
           </div>

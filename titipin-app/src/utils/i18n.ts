@@ -103,10 +103,6 @@ export const translations = {
     notifEmpty: 'Belum Ada Notifikasi',
     notifEmptySub: 'Semua peringatan waktu sewa, struk pembayaran, dan info loker akan muncul di sini.',
     notifMarkAllRead: 'Tandai Semua Dibaca',
-    notifSimulatorTitle: 'Simulasi Notifikasi',
-    notifSimulatePayment: 'Notif Bayar Sukses',
-    notifSimulateWarning: 'Notif Waktu 10 Menit',
-    notifSimulateUnlock: 'Notif Buka Pintu',
 
     // Payment
     payTitle: 'Pembayaran',
@@ -227,10 +223,6 @@ export const translations = {
     notifEmpty: 'No Notifications Yet',
     notifEmptySub: 'Time warnings, payment receipts, and locker alerts will appear here.',
     notifMarkAllRead: 'Mark All as Read',
-    notifSimulatorTitle: 'Notification Simulator',
-    notifSimulatePayment: 'Simulate Payment Success',
-    notifSimulateWarning: 'Simulate 10 Min Warning',
-    notifSimulateUnlock: 'Simulate Door Unlock',
 
     // Payment
     payTitle: 'Payment',
