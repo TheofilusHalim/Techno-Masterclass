@@ -9,7 +9,7 @@ export function Auth() {
   const location = useLocation()
   const from = (location.state as { from?: string })?.from || '/'
 
-  const { loginUser, registerUser } = useStore()
+  const { loginUser, registerUser, logoutUser } = useStore()
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot' | 'reset'>('signin')
   const [fullName, setFullName] = useState('')
@@ -26,6 +26,7 @@ export function Auth() {
     setFullName('')
     setEmail('')
     setPassword('')
+    setConfirmPassword('')
     setShowPassword(false)
     setErrorMessage(null)
     setSuccessMessage(null)
@@ -38,6 +39,11 @@ export function Auth() {
     if (params.get('reset') === '1') {
       setMode('reset')
       setSuccessMessage('Silakan masukkan kata sandi baru untuk akun Anda.')
+    } else if (params.get('password_updated') === '1') {
+      setMode('signin')
+      setSuccessMessage(
+        'Kata sandi berhasil diperbarui! Sesi sebelumnya telah dikeluarkan, silakan masuk kembali menggunakan kata sandi baru Anda.'
+      )
     } else if (params.get('verified') === '1') {
       setMode('signin')
       setSuccessMessage('Email berhasil dikonfirmasi! Silakan masuk dengan email dan kata sandi Anda.')
@@ -48,6 +54,9 @@ export function Auth() {
   }, [location.pathname, location.search])
 
   const handleTabChange = (newMode: 'signin' | 'signup') => {
+    if (location.search) {
+      navigate('/auth', { replace: true })
+    }
     setMode(newMode)
     resetFields()
   }
@@ -95,12 +104,17 @@ export function Auth() {
       try {
         const { error } = await supabase.auth.updateUser({ password })
         if (error) {
-          setErrorMessage(error.message)
+          if (error.message.toLowerCase().includes('different from the old password')) {
+            setErrorMessage('Kata sandi baru harus berbeda dari kata sandi sebelumnya.')
+          } else {
+            setErrorMessage(error.message)
+          }
         } else {
+          // Sign out sesi lama/recovery dengan rapi agar user login ulang menggunakan kata sandi baru
+          await logoutUser()
           setPassword('')
           setConfirmPassword('')
-          setMode('signin')
-          setSuccessMessage('Kata sandi berhasil diperbarui! Silakan masuk dengan kata sandi baru Anda.')
+          navigate('/auth?password_updated=1', { replace: true })
         }
       } catch (err: unknown) {
         setErrorMessage(err instanceof Error ? err.message : String(err))
@@ -131,8 +145,8 @@ export function Auth() {
       if (mode === 'signin') {
         const res = await loginUser(email, password)
         if (res.success) {
-          setSuccessMessage('Login successful! Redirecting...')
           resetFields()
+          setSuccessMessage('Login successful! Redirecting...')
           setTimeout(() => navigate(from, { replace: true }), 700)
         } else {
           setErrorMessage(res.error || 'Failed to sign in. Please check your credentials.')
@@ -195,26 +209,28 @@ export function Auth() {
         </p>
 
         {/* Tab switch */}
-        <div className="flex p-1 bg-green-800/70 backdrop-blur rounded-2xl mt-5">
-          <button
-            type="button"
-            onClick={() => handleTabChange('signin')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
-              mode === 'signin' ? 'bg-white text-green-800 shadow-sm' : 'text-green-200 hover:text-white'
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTabChange('signup')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
-              mode === 'signup' ? 'bg-white text-green-800 shadow-sm' : 'text-green-200 hover:text-white'
-            }`}
-          >
-            Sign Up
-          </button>
-        </div>
+        {mode !== 'reset' && (
+          <div className="flex p-1 bg-green-800/70 backdrop-blur rounded-2xl mt-5">
+            <button
+              type="button"
+              onClick={() => handleTabChange('signin')}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+                mode === 'signin' ? 'bg-white text-green-800 shadow-sm' : 'text-green-200 hover:text-white'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('signup')}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+                mode === 'signup' ? 'bg-white text-green-800 shadow-sm' : 'text-green-200 hover:text-white'
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Form Content */}
@@ -363,6 +379,9 @@ export function Auth() {
                 setErrorMessage(null)
                 setSuccessMessage(null)
                 setMode('signin')
+                if (location.search) {
+                  navigate('/auth', { replace: true })
+                }
               }}
               className="w-full py-2.5 text-xs font-bold text-gray-500 hover:text-gray-800 transition-colors"
             >

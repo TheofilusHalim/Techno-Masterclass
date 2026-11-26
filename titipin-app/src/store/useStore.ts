@@ -769,9 +769,17 @@ export const useStore = create<AppState>((set, get) => ({
 
   logoutUser: async () => {
     try {
-      await supabase.auth.signOut()
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        await supabase.auth.signOut({ scope: 'local' })
+      }
     } catch (err) {
       console.warn('Signout warning:', err)
+      try {
+        await supabase.auth.signOut({ scope: 'local' })
+      } catch {
+        // ignore fallback signout error
+      }
     }
     try {
       localStorage.removeItem(TX_STORAGE_KEY)
@@ -788,6 +796,12 @@ export const useStore = create<AppState>((set, get) => ({
       hasActiveLocker: false,
       activeBookingId: null,
       activeBooking: null,
+      activeBookings: [],
+      selectedActiveBookingIndex: 0,
+      lockerNumber: '',
+      remainingSeconds: 0,
+      isOverdue: false,
+      lateFee: 0,
       hasMonthlyPlan: false,
       planExpiresAt: null,
       transactions: [],

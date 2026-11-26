@@ -16,8 +16,10 @@ export function AppShell() {
   const [availableUpdate, setAvailableUpdate] = useState<AppVersionInfo | null>(null)
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
   const mainRef = useRef<HTMLElement | null>(null)
+  const pathnameRef = useRef(location.pathname)
 
   useEffect(() => {
+    pathnameRef.current = location.pathname
     mainRef.current?.scrollTo(0, 0)
     window.scrollTo(0, 0)
   }, [location.pathname])
@@ -109,9 +111,16 @@ export function AppShell() {
           hasActiveLocker: false,
           activeBookingId: null,
           activeBooking: null,
+          activeBookings: [],
+          selectedActiveBookingIndex: 0,
+          isOverdue: false,
+          lateFee: 0,
+          hasMonthlyPlan: false,
+          planExpiresAt: null,
         })
         // If not authenticated and not already on /auth or /login, redirect to /auth
-        if (location.pathname !== '/auth' && location.pathname !== '/login' && location.pathname !== '/faq') {
+        const currentPath = pathnameRef.current
+        if (currentPath !== '/auth' && currentPath !== '/login' && currentPath !== '/faq') {
           navigate('/auth', { replace: true })
         }
       }
@@ -142,8 +151,15 @@ export function AppShell() {
           hasActiveLocker: false,
           activeBookingId: null,
           activeBooking: null,
+          activeBookings: [],
+          selectedActiveBookingIndex: 0,
+          isOverdue: false,
+          lateFee: 0,
+          hasMonthlyPlan: false,
+          planExpiresAt: null,
         })
-        if (location.pathname !== '/auth' && location.pathname !== '/login' && location.pathname !== '/faq') {
+        const currentPath = pathnameRef.current
+        if (currentPath !== '/auth' && currentPath !== '/login' && currentPath !== '/faq') {
           navigate('/auth', { replace: true })
         }
       }

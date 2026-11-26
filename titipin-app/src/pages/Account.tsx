@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown, LogIn, Shield, User, CheckCircle2, Check, ArrowUpCircle, KeyRound, Eye, EyeOff, X, Loader2, AlertCircle } from 'lucide-react'
+import { Bell, MessageSquare, HelpCircle, Globe, LogOut, ChevronRight, Crown, LogIn, Shield, User, CheckCircle2, Check, ArrowUpCircle, KeyRound, Mail, MailCheck, Send, X, Loader2, AlertCircle } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useTranslation } from '../utils/i18n'
 import { supabase } from '../lib/supabase'
@@ -17,10 +17,8 @@ export function Account() {
   const { t } = useTranslation()
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false)
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [showNewPass, setShowNewPass] = useState(false)
-  const [showConfirmPass, setShowConfirmPass] = useState(false)
+  const [passwordEmailSent, setPasswordEmailSent] = useState(false)
+  const [sentTargetEmail, setSentTargetEmail] = useState('')
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [manualUpdateInfo, setManualUpdateInfo] = useState<AppVersionInfo | null>(null)
@@ -52,42 +50,34 @@ export function Account() {
     }
   }
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSendPasswordResetEmail = async () => {
     setPasswordError(null)
+    let targetEmail = (userEmail || '').trim()
 
-    if (newPassword.length < 6) {
-      setPasswordError(
-        language === 'en'
-          ? 'New password must be at least 6 characters.'
-          : 'Kata sandi baru minimal 6 karakter.'
-      )
-      return
+    if (!targetEmail) {
+      const { data } = await supabase.auth.getUser()
+      targetEmail = (data.user?.email || '').trim()
     }
-    if (newPassword !== confirmPassword) {
+
+    if (!targetEmail) {
       setPasswordError(
         language === 'en'
-          ? 'Password confirmation does not match.'
-          : 'Konfirmasi kata sandi tidak cocok.'
+          ? 'Account email not found. Please sign in again.'
+          : 'Email akun tidak ditemukan. Silakan masuk kembali.'
       )
       return
     }
 
     setPasswordLoading(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword })
+      const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+        redirectTo: 'https://theofilushalim.github.io/Techno-Masterclass/email-confirmed.html?type=recovery',
+      })
       if (error) {
         setPasswordError(error.message)
       } else {
-        setIsPasswordModalOpen(false)
-        setNewPassword('')
-        setConfirmPassword('')
-        setUpdateToast(
-          language === 'en'
-            ? 'Password updated successfully.'
-            : 'Kata sandi berhasil diperbarui.'
-        )
-        setTimeout(() => setUpdateToast(null), 3500)
+        setSentTargetEmail(targetEmail)
+        setPasswordEmailSent(true)
       }
     } catch (err: unknown) {
       setPasswordError(err instanceof Error ? err.message : String(err))
@@ -104,8 +94,8 @@ export function Account() {
             label: language === 'en' ? 'Change Password' : 'Ubah Kata Sandi',
             action: () => {
               setPasswordError(null)
-              setNewPassword('')
-              setConfirmPassword('')
+              setPasswordEmailSent(false)
+              setSentTargetEmail('')
               setIsPasswordModalOpen(true)
             },
           },
@@ -255,7 +245,7 @@ export function Account() {
           ))}
         </div>
 
-        <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.8 • Connected to Supabase Auth</p>
+        <p className="text-center text-xs text-gray-300 pb-2">Titipin v1.0.9 • Connected to Supabase Auth</p>
       </div>
 
       {/* Language Selection Dialog / Popup */}
@@ -348,21 +338,27 @@ export function Account() {
         </div>
       )}
 
-      {/* Change Password Modal */}
+      {/* Change Password Modal (Email Verification Flow) */}
       {isPasswordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
           <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-green-100 text-green-700 flex items-center justify-center">
-                  <KeyRound size={17} />
+                  {passwordEmailSent ? <MailCheck size={17} /> : <KeyRound size={17} />}
                 </div>
                 <div>
                   <h3 className="font-extrabold text-sm text-gray-900">
                     {language === 'en' ? 'Change Password' : 'Ubah Kata Sandi'}
                   </h3>
                   <p className="text-[11px] text-gray-500">
-                    {language === 'en' ? 'Update your account password securely' : 'Perbarui kata sandi akun Anda'}
+                    {passwordEmailSent
+                      ? language === 'en'
+                        ? 'Check your email inbox'
+                        : 'Periksa kotak masuk email Anda'
+                      : language === 'en'
+                      ? 'Email verification required for security'
+                      : 'Verifikasi email diperlukan demi keamanan'}
                   </p>
                 </div>
               </div>
@@ -383,79 +379,91 @@ export function Account() {
               </div>
             )}
 
-            <form onSubmit={handleChangePassword} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  {language === 'en' ? 'New Password' : 'Kata Sandi Baru'}
-                </label>
-                <div className="relative">
-                  <input
-                    type={showNewPass ? 'text' : 'password'}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder={language === 'en' ? 'Minimum 6 characters' : 'Minimal 6 karakter'}
-                    className="w-full pr-10 pl-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 outline-none focus:border-green-600 focus:bg-white transition-all"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPass((v) => !v)}
-                    aria-label="Toggle password visibility"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
+            {passwordEmailSent ? (
+              <div className="space-y-4 pt-1">
+                <div className="flex flex-col items-center text-center space-y-2.5">
+                  <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center">
+                    <MailCheck size={26} />
+                  </div>
+                  <h4 className="font-bold text-sm text-gray-900">
+                    {language === 'en' ? 'Verification Link Sent' : 'Tautan Verifikasi Terkirim'}
+                  </h4>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    {language === 'en' ? (
+                      <>
+                        A password reset verification link has been sent to{' '}
+                        <span className="font-semibold text-gray-900">{sentTargetEmail || userEmail}</span>.
+                        Open your inbox or spam folder and click the link to return to Titipin and set your new password.
+                      </>
+                    ) : (
+                      <>
+                        Tautan verifikasi ubah kata sandi telah dikirim ke{' '}
+                        <span className="font-semibold text-gray-900">{sentTargetEmail || userEmail}</span>.
+                        Silakan cek kotak masuk atau folder spam email Anda, lalu klik tautan tersebut untuk kembali ke aplikasi dan mengatur kata sandi baru.
+                      </>
+                    )}
+                  </p>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  {language === 'en' ? 'Confirm New Password' : 'Konfirmasi Kata Sandi Baru'}
-                </label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPass ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder={language === 'en' ? 'Re-enter new password' : 'Ulangi kata sandi baru'}
-                    className="w-full pr-10 pl-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 outline-none focus:border-green-600 focus:bg-white transition-all"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPass((v) => !v)}
-                    aria-label="Toggle confirm password visibility"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-2 space-y-2">
-                <button
-                  type="submit"
-                  disabled={passwordLoading}
-                  className="w-full py-3 bg-green-700 hover:bg-green-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
-                >
-                  {passwordLoading && <Loader2 size={14} className="animate-spin" />}
-                  {passwordLoading
-                    ? language === 'en'
-                      ? 'Saving...'
-                      : 'Menyimpan...'
-                    : language === 'en'
-                    ? 'Save New Password'
-                    : 'Simpan Kata Sandi'}
-                </button>
                 <button
                   type="button"
                   onClick={() => setIsPasswordModalOpen(false)}
-                  className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-all"
+                  className="w-full py-3 bg-green-700 hover:bg-green-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm"
                 >
-                  {language === 'en' ? 'Cancel' : 'Batal'}
+                  {language === 'en' ? 'Got It' : 'Mengerti'}
                 </button>
               </div>
-            </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-green-50/70 border border-green-200/80 rounded-2xl p-3.5 space-y-2.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-green-900">
+                    <Shield size={14} className="text-green-700 flex-shrink-0" />
+                    <span>
+                      {language === 'en' ? 'Account Verification' : 'Verifikasi Keamanan Akun'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    {language === 'en'
+                      ? 'To protect your account, we will send a verification link to your registered email address. After clicking the link, you will automatically return to the app to set a new password.'
+                      : 'Demi keamanan akun, kami akan mengirimkan tautan verifikasi ke email akun Anda. Setelah klik tautan di email, Anda akan otomatis kembali ke aplikasi untuk mengatur kata sandi baru.'}
+                  </p>
+                  <div className="flex items-center gap-2 bg-white border border-green-200 rounded-xl px-3 py-2 text-xs text-gray-800 font-medium">
+                    <Mail size={14} className="text-green-700 flex-shrink-0" />
+                    <span className="truncate">{userEmail}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={handleSendPasswordResetEmail}
+                    disabled={passwordLoading}
+                    className="w-full py-3 bg-green-700 hover:bg-green-800 disabled:opacity-60 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    {passwordLoading ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Send size={14} />
+                    )}
+                    {passwordLoading
+                      ? language === 'en'
+                        ? 'Sending Verification Link...'
+                        : 'Mengirim Tautan Verifikasi...'
+                      : language === 'en'
+                      ? 'Send Verification Link'
+                      : 'Kirim Tautan Verifikasi'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordModalOpen(false)}
+                    disabled={passwordLoading}
+                    className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-60 text-gray-700 font-bold text-xs rounded-xl transition-all"
+                  >
+                    {language === 'en' ? 'Cancel' : 'Batal'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
